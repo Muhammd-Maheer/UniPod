@@ -8,6 +8,7 @@ export interface Song {
   artist: string;
   album: string;
   duration: number; // seconds
+  path: string;
 }
 
 export interface PlayerState {

@@ -4,9 +4,10 @@ import { ViewMode } from '../types';
 interface SidebarProps {
   currentView: ViewMode;
   onSelectView: (view: ViewMode) => void;
+  onAddSongs: () => void;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ currentView, onSelectView }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ currentView, onSelectView, onAddSongs }) => {
   return (
     <aside className="sidebar">
       <h2>My Music</h2>
@@ -36,6 +37,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onSelectView }) =
           Playlists
         </button>
       </nav>
+      <button className='btn-add-songs' onClick={onAddSongs}>+ Add Songs</button>
     </aside>
   );
 };

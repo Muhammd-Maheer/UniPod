@@ -253,6 +253,23 @@ button {
   justify-content: center;
 }
 
+.btn-add-songs {
+  margin-top: 16px;
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  background: none;
+  color: var(--text-sub);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.btn-add-songs:hover {
+  color: var(--text);
+  border-color: var(--primary);
+}
+
 .progress-container {
   display: flex;
   align-items: center;
@@ -296,9 +313,4 @@ button {
   align-items: center;
   gap: 8px;
   justify-content: flex-end;
-}
-
-.volume-slider {
-  flex: none;
-  width: 90px;
 }
