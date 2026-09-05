@@ -1,0 +1,225 @@
+:root {
+  --bg-base: #121212;
+  --bg-surface: #181818;
+  --bg-highlight: #282828;
+  --text-main: #ffffff;
+  --text-sub: #b3b3b3;
+  --accent: #1db954;
+  --accent-disabled: #535353;
+  --border: #282828;
+  --sidebar-width: 220px;
+  --player-height: 80px;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  user-select: none;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background-color: var(--bg-base);
+  color: var(--text-main);
+  overflow: hidden;
+  height: 100vh;
+  width: 100vw;
+}
+
+.app-container {
+  display: grid;
+  grid-template-columns: var(--sidebar-width) 1fr;
+  grid-template-rows: 1fr var(--player-height);
+  grid-template-areas:
+    "sidebar main"
+    "player  player";
+  height: 100vh;
+  width: 100vw;
+}
+
+/* Sidebar Styling */
+.sidebar {
+  grid-area: sidebar;
+  background-color: var(--bg-surface);
+  border-right: 1px solid var(--border);
+  padding: 20px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.sidebar h2 {
+  font-size: 1.1rem;
+  letter-spacing: -0.5px;
+  color: var(--text-main);
+}
+
+.nav-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.nav-item {
+  background: none;
+  border: none;
+  color: var(--text-sub);
+  text-align: left;
+  padding: 10px 12px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.nav-item:hover {
+  background-color: var(--bg-highlight);
+  color: var(--text-main);
+}
+
+.nav-item.active {
+  background-color: var(--bg-highlight);
+  color: var(--text-main);
+  font-weight: 600;
+}
+
+/* Main View Styling */
+.main-view {
+  grid-area: main;
+  padding: 24px 32px;
+  overflow-y: auto;
+  background: linear-gradient(to bottom, #1e1e1e 0%, var(--bg-base) 300px);
+}
+
+.view-header {
+  margin-bottom: 20px;
+}
+
+.song-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 0.875rem;
+}
+
+.song-table th {
+  color: var(--text-sub);
+  border-bottom: 1px solid var(--border);
+  padding: 8px 12px;
+  font-weight: 400;
+}
+
+.song-table td {
+  padding: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  color: var(--text-sub);
+}
+
+.song-row {
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.song-row:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.song-row.active {
+  color: var(--accent);
+}
+
+.song-title-cell {
+  color: var(--text-main);
+  font-weight: 500;
+}
+
+/* Player Bar Styling */
+.player-bar {
+  grid-area: player;
+  background-color: var(--bg-surface);
+  border-top: 1px solid var(--border);
+  display: grid;
+  grid-template-columns: 1fr 2fr 1fr;
+  align-items: center;
+  padding: 0 20px;
+}
+
+.track-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.track-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.track-artist {
+  font-size: 0.75rem;
+  color: var(--text-sub);
+}
+
+.player-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.control-buttons {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.btn-control {
+  background: none;
+  border: none;
+  color: var(--text-sub);
+  cursor: pointer;
+  font-size: 1rem;
+}
+
+.btn-control:hover {
+  color: var(--text-main);
+}
+
+.btn-play {
+  background-color: var(--text-main);
+  color: var(--bg-base);
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  cursor: pointer;
+}
+
+.progress-container {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  max-width: 500px;
+  font-size: 0.75rem;
+  color: var(--text-sub);
+}
+
+.seek-slider {
+  flex: 1;
+  accent-color: var(--accent);
+  height: 4px;
+  cursor: pointer;
+}
+
+.volume-container {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+}
