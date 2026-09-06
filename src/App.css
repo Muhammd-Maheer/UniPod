@@ -178,6 +178,24 @@ button {
   font-weight: 600;
 }
 
+/* Target the element displaying your song title in the song list/table */
+.song-title-cell, 
+.view-container td:nth-child(2), /* Adjust selector based on your song row layout */
+.song-item-title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 250px; /* Adjust this to match the approximate length of your second song item */
+}
+
+.song-title-truncated {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 250px; /* Adjust to fit your column layout */
+  cursor: default;
+}
+
 .player-bar {
   display: flex;
   align-items: center;
@@ -237,7 +255,7 @@ button {
 }
 
 .btn-control.active {
-  color: var (--primary)
+  color: var(--text)
 }
 
 .btn-play {
@@ -430,7 +448,10 @@ button {
 }
 
 .volume-popup {
-  display: none;
+  display: flex;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 1s ease, visibility 1s ease;
   position: absolute;
   bottom: 100%;
   left: 50%;
@@ -444,10 +465,14 @@ button {
   height: 100px;
   align-items: center;
   justify-content: center;
+  margin-bottom: 0;
+  padding: 12px 10px 22px 10px;
 }
 
 .now-playing-volume:hover .volume-popup {
-  display: flex;
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.1 ease, visbility 0.1s ease;
 }
 
 .volume-vertical {

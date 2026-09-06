@@ -9,6 +9,7 @@ import { PlayerState, Song, ViewMode } from './types';
 import { NowPlaying } from './components/NowPlaying';
 import './App.css';
 
+
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<ViewMode>('songs');
   const [songs, setSongs] = useState<Song[]>([]);
@@ -18,6 +19,7 @@ const App: React.FC = () => {
   const leftPressRef = useRef(0);
   const rightTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const leftTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastVolumeRef = useRef(0.8);
   const [playerState, setPlayerState] = useState<PlayerState>({
     currentSong: null,
     isPlaying: false,
@@ -113,10 +115,22 @@ const App: React.FC = () => {
     setPlayerState((prev) => ({ ...prev, currentTime: seconds }));
   };
 
-  const handleVolumeChange = (level: number) => {
-    if (audioRef.current) audioRef.current.volume = level;
-    setPlayerState((prev) => ({ ...prev, volume: level }));
-  };
+const handleVolumeChange = (level: number) => {
+  if (level > 0) {
+    lastVolumeRef.current = level;
+  }
+  if (audioRef.current) audioRef.current.volume = level;
+  setPlayerState((prev) => ({ ...prev, volume: level }));
+};
+
+const handleToggleMute = () => {
+  if (playerState.volume > 0) {
+    lastVolumeRef.current = playerState.volume;
+    handleVolumeChange(0);
+  } else {
+    handleVolumeChange(lastVolumeRef.current || 0.8);
+  }
+};
 
   const handleNext = () => advance(1);
   const handlePrevious = () => advance(-1);
@@ -230,7 +244,7 @@ const skipToPrevious = () => {
 }, [playerState.isPlaying, playerState.currentSong]);
 
 useEffect(() => {
-  const handleArrowKeys = (e: KeyboardEvent) => {
+  const handleVolumeKeys = (e: KeyboardEvent) => {
     const target = e.target as HTMLElement;
     const isTyping =
       target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
@@ -243,11 +257,14 @@ useEffect(() => {
     } else if (e.code === 'ArrowDown') {
       e.preventDefault();
       handleVolumeChange(Math.max(0, playerState.volume - 0.05));
+    } else if (e.code === 'KeyM') {
+      e.preventDefault();
+      handleToggleMute();
     }
   };
 
-  window.addEventListener('keydown', handleArrowKeys);
-  return () => window.removeEventListener('keydown', handleArrowKeys);
+  window.addEventListener('keydown', handleVolumeKeys);
+  return () => window.removeEventListener('keydown', handleVolumeKeys);
 }, [playerState.volume]);
 
 useEffect(() => {
@@ -348,6 +365,7 @@ useEffect(() => {
             onNext={handleNext}
             onToggleShuffle={handleToggleShuffle}
             onToggleRepeat={handleToggleRepeat}
+            onToggleMute={handleToggleMute}
           />
         )}
       </div>
@@ -361,6 +379,7 @@ useEffect(() => {
           onNext={handleNext}
           onToggleShuffle={handleToggleShuffle}
           onToggleRepeat={handleToggleRepeat}
+          onToggleMute={handleToggleMute}
         />
       )}
     </div>

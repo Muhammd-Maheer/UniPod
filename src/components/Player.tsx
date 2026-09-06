@@ -1,6 +1,7 @@
 import React from 'react';
 import { PlayerState } from '../types';
-import { Shuffle, Repeat, Repeat1, Volume2 } from 'lucide-react';
+import { Shuffle, Repeat, Repeat1 } from 'lucide-react';
+import { getVolumeIcon } from '../utils/volumeIcon';
 
 interface PlayerProps {
   state: PlayerState;
@@ -11,6 +12,7 @@ interface PlayerProps {
   onNext: () => void;
   onToggleShuffle: () => void;
   onToggleRepeat: () => void;
+  onToggleMute: () => void;
 }
 
 export const Player: React.FC<PlayerProps> = ({
@@ -22,6 +24,7 @@ export const Player: React.FC<PlayerProps> = ({
   onNext,
   onToggleShuffle,
   onToggleRepeat,
+  onToggleMute,
 }) => {
   const formatTime = (secs: number) => {
     if (isNaN(secs)) return '0:00';
@@ -32,6 +35,7 @@ export const Player: React.FC<PlayerProps> = ({
 
   const progressPercent = state.duration > 0 ? (state.currentTime / state.duration) * 100 : 0;
   const volumePercent = state.volume * 100;
+  const VolumeIcon = getVolumeIcon(state.volume);
 
   return (
     <footer className="player-bar">
@@ -53,7 +57,7 @@ export const Player: React.FC<PlayerProps> = ({
             onClick={onToggleShuffle}
             title="Shuffle"
           >
-            <Shuffle size={18}/>
+            <Shuffle size={18} />
           </button>
           <button className="btn-control" onClick={onPrevious} title="Previous">⏮</button>
           <button className="btn-play" onClick={onTogglePlay} title="Play/Pause">
@@ -65,7 +69,7 @@ export const Player: React.FC<PlayerProps> = ({
             onClick={onToggleRepeat}
             title="Repeat"
           >
-            {state.repeatMode === 'one' ? <Repeat1 size={18} /> : <Repeat  size={18} />}
+            {state.repeatMode === 'one' ? <Repeat1 size={18} /> : <Repeat size={18} />}
           </button>
         </div>
 
@@ -88,14 +92,16 @@ export const Player: React.FC<PlayerProps> = ({
 
       {/* Volume Control */}
       <div className="volume-container">
-        <Volume2 size={16} color='var(--text-sub)'/>
+        <button className="btn-control" onClick={onToggleMute} title="Mute">
+          <VolumeIcon size={16} color="var(--text-sub)" />
+        </button>
         <input
           type="range"
           className="seek-slider volume-slider"
           style={{
             maxWidth: '100px',
             background: `linear-gradient(to right, var(--primary) ${volumePercent}%, var(--border) ${volumePercent}%)`,
-            }}
+          }}
           min={0}
           max={1}
           step={0.01}

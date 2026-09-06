@@ -1,5 +1,6 @@
 import React from 'react';
 import { Song, ViewMode } from '../types';
+import { TruncatedTitle } from './TruncatedTitle';
 
 interface ViewContainerProps {
   currentView: ViewMode;
@@ -47,7 +48,7 @@ export const ViewContainer: React.FC<ViewContainerProps> = ({
                   onClick={() => onSelectSong(song)}
                 >
                   <td>{index + 1}</td>
-                  <td className="song-title-cell">{song.title}</td>
+                  <td className="song-title-cell"><TruncatedTitle title={song.title} /></td>
                   <td>{song.artist}</td>
                   <td>{song.album}</td>
                   <td>{formatTime(song.duration)}</td>

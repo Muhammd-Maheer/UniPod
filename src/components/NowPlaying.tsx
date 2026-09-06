@@ -1,6 +1,7 @@
 import React from 'react';
 import { PlayerState } from '../types';
-import { Shuffle, Repeat, Repeat1, Volume2 } from 'lucide-react';
+import { Shuffle, Repeat, Repeat1 } from 'lucide-react';
+import { getVolumeIcon } from '../utils/volumeIcon';
 
 interface NowPlayingProps {
   state: PlayerState;
@@ -13,6 +14,7 @@ interface NowPlayingProps {
   onNext: () => void;
   onToggleShuffle: () => void;
   onToggleRepeat: () => void;
+  onToggleMute: () => void;
 }
 
 export const NowPlaying: React.FC<NowPlayingProps> = ({
@@ -26,6 +28,7 @@ export const NowPlaying: React.FC<NowPlayingProps> = ({
   onNext,
   onToggleShuffle,
   onToggleRepeat,
+  onToggleMute,
 }) => {
   const formatTime = (secs: number) => {
     if (isNaN(secs)) return '0:00';
@@ -37,6 +40,7 @@ export const NowPlaying: React.FC<NowPlayingProps> = ({
   const progressPercent = state.duration > 0 ? (state.currentTime / state.duration) * 100 : 0;
   const volumePercent = state.volume * 100;
   const song = state.currentSong;
+  const VolumeIcon = getVolumeIcon(state.volume);
 
   return (
     <aside className="now-playing">
@@ -93,25 +97,24 @@ export const NowPlaying: React.FC<NowPlayingProps> = ({
           {state.repeatMode === 'one' ? <Repeat1 size={18} /> : <Repeat size={18} />}
         </button>
         <div className="now-playing-volume">
-            <button className='btn-control' title='Volume'>
-                <Volume2 size={16} />
-            </button>
-        <div className="volume-popup">
-          <input
-            type="range"
-            className="seek-slider volume-vertical"
-            min={0}
-            max={1}
-            step={0.01}
-            value={state.volume}
-            onChange={(e) => onVolumeChange(Number(e.target.value))}
-            style={{
-              background: `linear-gradient(to right, var(--primary) ${volumePercent}%, var(--border) ${volumePercent}%)`,
-            }}
-          />
+          <button className="btn-control" onClick={onToggleMute} title="Mute">
+            <VolumeIcon size={16} />
+          </button>
+          <div className="volume-popup">
+            <input
+              type="range"
+              className="seek-slider volume-vertical"
+              min={0}
+              max={1}
+              step={0.01}
+              value={state.volume}
+              onChange={(e) => onVolumeChange(Number(e.target.value))}
+              style={{
+                background: `linear-gradient(to right, var(--primary) ${volumePercent}%, var(--border) ${volumePercent}%)`,
+              }}
+            />
+          </div>
         </div>
-      </div>
-
       </div>
     </aside>
   );
