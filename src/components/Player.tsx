@@ -1,5 +1,6 @@
 import React from 'react';
 import { PlayerState } from '../types';
+import { Shuffle, Repeat, Repeat1, Volume2 } from 'lucide-react';
 
 interface PlayerProps {
   state: PlayerState;
@@ -52,7 +53,7 @@ export const Player: React.FC<PlayerProps> = ({
             onClick={onToggleShuffle}
             title="Shuffle"
           >
-            🔀
+            <Shuffle size={18}/>
           </button>
           <button className="btn-control" onClick={onPrevious} title="Previous">⏮</button>
           <button className="btn-play" onClick={onTogglePlay} title="Play/Pause">
@@ -64,7 +65,7 @@ export const Player: React.FC<PlayerProps> = ({
             onClick={onToggleRepeat}
             title="Repeat"
           >
-            {state.repeatMode === 'one' ? '🔂' : '🔁'}
+            {state.repeatMode === 'one' ? <Repeat1 size={18} /> : <Repeat  size={18} />}
           </button>
         </div>
 
@@ -87,7 +88,7 @@ export const Player: React.FC<PlayerProps> = ({
 
       {/* Volume Control */}
       <div className="volume-container">
-        <span style={{ fontSize: '0.8rem', color: 'var(--text-sub)' }}>🔊</span>
+        <Volume2 size={16} color='var(--text-sub)'/>
         <input
           type="range"
           className="seek-slider volume-slider"

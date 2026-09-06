@@ -229,13 +229,14 @@ button {
   font-size: 1rem;
   color: var(--text-sub);
   cursor: pointer;
+  padding: 4px;
 }
 
 .btn-control:hover {
   color: var(--text);
 }
 
-.btn-control:active {
+.btn-control.active {
   color: var (--primary)
 }
 
@@ -313,4 +314,153 @@ button {
   align-items: center;
   gap: 8px;
   justify-content: flex-end;
+}
+
+
+.now-playing {
+  width: 300px;
+  flex-shrink: 0;
+  background: var(--card-bg);
+  border-left: 1px solid var(--border);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  overflow-y: auto;
+}
+
+.now-playing-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  background: none;
+  border: none;
+  font-size: 0.9rem;
+  color: var(--text-sub);
+  cursor: pointer;
+}
+
+.now-playing-close:hover {
+  color: var(--text);
+}
+
+.now-playing-art {
+  width: 180px;
+  height: 180px;
+  border-radius: 12px;
+  background: var(--sidebar-bg);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  margin: 32px 0 20px;
+}
+
+.now-playing-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.now-playing-art-fallback {
+  font-size: 3rem;
+  color: var(--text-sub);
+}
+
+.now-playing-title {
+  font-weight: 700;
+  font-size: 1.05rem;
+  text-align: center;
+}
+
+.now-playing-artist {
+  font-size: 0.88rem;
+  color: var(--text-sub);
+  margin-top: 4px;
+  text-align: center;
+}
+
+.now-playing-album {
+  font-size: 0.78rem;
+  color: var(--text-sub);
+  opacity: 0.8;
+  margin-top: 2px;
+  text-align: center;
+}
+
+.now-playing-progress {
+  width: 100%;
+  margin-top: 22px;
+}
+
+.now-playing-times {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.72rem;
+  color: var(--text-sub);
+  margin-top: 4px;
+}
+
+.now-playing-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.now-playing-controls > button,
+.now-playing-controls > div {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 34px;
+}
+
+.now-playing-volume {
+  position: relative;
+  top: -6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 18px;
+}
+
+.volume-popup {
+  display: none;
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 10px;
+  padding: 12px 10px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  width: 32px;
+  height: 100px;
+  align-items: center;
+  justify-content: center;
+}
+
+.now-playing-volume:hover .volume-popup {
+  display: flex;
+}
+
+.volume-vertical {
+  width: 80px;
+  height: 4px;
+  transform: rotate(-90deg);
+}
+
+.now-playing-progress .seek-slider {
+  width: 100%;
+}
+
+.nudge-icon {
+  position: relative;
+  top: 2px;
 }

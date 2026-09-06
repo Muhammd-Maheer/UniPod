@@ -6,6 +6,7 @@ import { Sidebar } from './components/Sidebar';
 import { ViewContainer } from './components/ViewContainer';
 import { Player } from './components/Player';
 import { PlayerState, Song, ViewMode } from './types';
+import { NowPlaying } from './components/NowPlaying';
 import './App.css';
 
 const App: React.FC = () => {
@@ -26,6 +27,8 @@ const App: React.FC = () => {
     shuffle: false,
     repeatMode: 'off',
   });
+  const [showNowPlaying, setShowNowPlaying] = useState(false);
+  const prevHadSongRef = useRef(false);
 
   const playSongById = (id: string, list: Song[] = songs) => {
     const song = list.find((s) => s.id === id);
@@ -85,7 +88,14 @@ const App: React.FC = () => {
     setPlayOrder((prev) => [...prev, ...newSongs.map((s) => s.id)]);
   };
 
-  const handleSelectSong = (song: Song) => playSongById(song.id);
+  const handleSelectSong = (song: Song) => {
+    if (playerState.currentSong?.id === song.id) {
+      setShowNowPlaying((prev) => !prev);
+    } else {
+      playSongById(song.id);
+      setShowNowPlaying(true);
+    }
+  };
 
   const handleTogglePlay = () => {
     const audio = audioRef.current;
@@ -111,7 +121,7 @@ const App: React.FC = () => {
   const handleNext = () => advance(1);
   const handlePrevious = () => advance(-1);
 
-const handleToggleShuffle = () => {
+  const handleToggleShuffle = () => {
     if (songs.length === 0) return;
 
     const turningOn = !playerState.shuffle;
@@ -305,15 +315,18 @@ useEffect(() => {
 }, [playerState.shuffle, playerState.repeatMode, playerState.currentSong, songs]);
 
 
+useEffect(() => {
+  const hasSong = !!playerState.currentSong;
+  if (hasSong && !prevHadSongRef.current) {
+    setShowNowPlaying(true);
+  }
+  prevHadSongRef.current = hasSong;
+}, [playerState.currentSong]);
+
 
   return (
     <div className="app">
-      <audio
-        ref={audioRef}
-        onTimeUpdate={handleTimeUpdate}
-        onLoadedMetadata={handleLoadedMetadata}
-        onEnded={handleEnded}
-      />
+      <audio ref={audioRef} onTimeUpdate={handleTimeUpdate} onLoadedMetadata={handleLoadedMetadata} onEnded={handleEnded} />
       <TitleBar isConnected={false} driveName="My Music" />
       <div className="app-body">
         <Sidebar currentView={currentView} onSelectView={setCurrentView} onAddSongs={handleAddSongs} />
@@ -323,17 +336,33 @@ useEffect(() => {
           currentSong={playerState.currentSong}
           onSelectSong={handleSelectSong}
         />
+        {showNowPlaying && playerState.currentSong && (
+          <NowPlaying
+            state={playerState}
+            playlistName= "No Playlist"
+            onClose={() => setShowNowPlaying(false)}
+            onTogglePlay={handleTogglePlay}
+            onSeek={handleSeek}
+            onVolumeChange={handleVolumeChange}
+            onPrevious={handlePrevious}
+            onNext={handleNext}
+            onToggleShuffle={handleToggleShuffle}
+            onToggleRepeat={handleToggleRepeat}
+          />
+        )}
       </div>
-      <Player
-        state={playerState}
-        onTogglePlay={handleTogglePlay}
-        onSeek={handleSeek}
-        onVolumeChange={handleVolumeChange}
-        onPrevious={handlePrevious}
-        onNext={handleNext}
-        onToggleShuffle={handleToggleShuffle}
-        onToggleRepeat={handleToggleRepeat}
-      />
+      {!showNowPlaying && (
+        <Player
+          state={playerState}
+          onTogglePlay={handleTogglePlay}
+          onSeek={handleSeek}
+          onVolumeChange={handleVolumeChange}
+          onPrevious={handlePrevious}
+          onNext={handleNext}
+          onToggleShuffle={handleToggleShuffle}
+          onToggleRepeat={handleToggleRepeat}
+        />
+      )}
     </div>
   );
 };
