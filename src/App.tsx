@@ -8,6 +8,7 @@ import { Player } from './components/Player';
 import { PlayerState, Song, ViewMode } from './types';
 import { NowPlaying } from './components/NowPlaying';
 import { parseFilenameForMetadata, extractArtistName } from './utils/parseFilename';
+import { readDir } from '@tauri-apps/plugin-fs';
 import './App.css';
 
 
@@ -273,6 +274,65 @@ const handleRemoveSong = (songId: string) => {
   setPlayerState((prev) => ({ ...prev, currentTime: newTime }));
 };
 
+
+const scanDirectory = async (dirPath: string): Promise<string[]> => {
+    let audioPaths: string[] = [];
+    const validExtensions = ['.mp3', '.wav', '.flac', '.m4a', '.ogg'];
+
+    try {
+      const entries = await readDir(dirPath);
+      for (const entry of entries) {
+        // Construct clean path with proper separator
+        const separator = dirPath.includes('\\') ? '\\' : '/';
+        const fullPath = `${dirPath.replace(/[/\\]+$/, '')}${separator}${entry.name}`;
+
+        if (entry.isDirectory) {
+          const subFolderFiles = await scanDirectory(fullPath);
+          audioPaths = audioPaths.concat(subFolderFiles);
+        } else if (entry.isFile) {
+          const ext = entry.name.slice(entry.name.lastIndexOf('.')).toLowerCase();
+          if (validExtensions.includes(ext)) {
+            audioPaths.push(fullPath);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Failed to read directory:', dirPath, err);
+    }
+
+    return audioPaths;
+  };
+
+  const handleScanFolder = async () => {
+    const selected = await open({
+      directory: true,
+      multiple: false,
+    });
+    if (!selected) return;
+
+    const folderPath = Array.isArray(selected) ? selected[0] : selected;
+    const foundAudioPaths = await scanDirectory(folderPath);
+
+    if (foundAudioPaths.length === 0) return;
+
+    const newSongs: Song[] = foundAudioPaths.map((path) => {
+      const fileName = path.split(/[/\\]/).pop() || 'Unknown';
+      const nameWithoutExt = fileName.replace(/\.[^/.]+$/, '');
+      const parsed = parseFilenameForMetadata(nameWithoutExt);
+      return {
+        id: crypto.randomUUID(),
+        title: nameWithoutExt,
+        artist: parsed.artist || 'Unknown Artist',
+        album: 'Unknown Album',
+        duration: 0,
+        path,
+      };
+    });
+
+    setSongs((prev) => [...prev, ...newSongs]);
+    setPlayOrder((prev) => [...prev, ...newSongs.map((s) => s.id)]);
+  };
+
 const skipToNext = () => {
   if (playOrder.length <= 1 || !playerState.currentSong) return;
   const idx = playOrder.indexOf(playerState.currentSong.id);
@@ -410,7 +470,12 @@ useEffect(() => {
       <audio ref={audioRef} onTimeUpdate={handleTimeUpdate} onLoadedMetadata={handleLoadedMetadata} onEnded={handleEnded} />
       <TitleBar isConnected={false} driveName="My Music" />
       <div className="app-body">
-        <Sidebar currentView={currentView} onSelectView={setCurrentView} onAddSongs={handleAddSongs} />
+        <Sidebar 
+          currentView={currentView} 
+          onSelectView={setCurrentView} 
+          onAddSongs={handleAddSongs}
+          onScanFolder={handleScanFolder}
+         />
         <ViewContainer
           currentView={currentView}
           songs={songs}

@@ -1,13 +1,20 @@
 import React from 'react';
 import { ViewMode } from '../types';
+import { Plus, FolderSearch, Music, Disc, Mic } from 'lucide-react';
 
 interface SidebarProps {
   currentView: ViewMode;
   onSelectView: (view: ViewMode) => void;
   onAddSongs: () => void;
+  onScanFolder: () => void;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ currentView, onSelectView, onAddSongs }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ 
+  currentView, 
+  onSelectView, 
+  onAddSongs,
+  onScanFolder
+ }) => {
   return (
     <aside className="sidebar">
       <h2>My Music</h2>
@@ -38,6 +45,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onSelectView, onA
         </button>
       </nav>
       <button className='btn-add-songs' onClick={onAddSongs}>+ Add Songs</button>
+      <button className="btn-add-songs" onClick={onScanFolder}>
+          <FolderSearch size={16} />
+          <span>Scan Folder</span>
+      </button>
     </aside>
   );
 };
