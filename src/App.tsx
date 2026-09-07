@@ -7,6 +7,7 @@ import { ViewContainer } from './components/ViewContainer';
 import { Player } from './components/Player';
 import { PlayerState, Song, ViewMode } from './types';
 import { NowPlaying } from './components/NowPlaying';
+import { parseFilenameForMetadata, extractArtistName } from './utils/parseFilename';
 import './App.css';
 
 
@@ -76,10 +77,12 @@ const App: React.FC = () => {
     const paths = Array.isArray(selected) ? selected : [selected];
     const newSongs: Song[] = paths.map((path) => {
       const fileName = path.split(/[/\\]/).pop() || 'Unknown';
+      const nameWithoutExt = fileName.replace(/\.[^/.]+$/, '');
+      const parsed = parseFilenameForMetadata(nameWithoutExt);
       return {
         id: crypto.randomUUID(),
         title: fileName.replace(/\.[^/.]+$/, ''),
-        artist: 'Unknown Artist',
+        artist: parsed.artist || 'Unkown Artist',
         album: 'Unknown Album',
         duration: 0,
         path,
@@ -199,6 +202,45 @@ const handleToggleMute = () => {
     }
     advance(1);
   };
+
+  const handleSwapArtistTitle = (songId: string) => {
+    setSongs((prev) =>
+      prev.map((s) => {
+        if (s.id !== songId) return s;
+
+        const extractedArtist = extractArtistName(s.title);
+        const originalParsedArtist = parseFilenameForMetadata(s.title).artist || 'Unknown Artist';
+
+        // Toggle: if it's currently the extracted one, switch back to the original
+        const newArtist = s.artist === extractedArtist ? originalParsedArtist : extractedArtist;
+
+        return { ...s, artist: newArtist };
+      })
+    );
+
+    setPlayerState((prev) => {
+      if (prev.currentSong?.id !== songId) return prev;
+      const cs = prev.currentSong;
+
+      const extractedArtist = extractArtistName(cs.title);
+      const originalParsedArtist = parseFilenameForMetadata(cs.title).artist || 'Unknown Artist';
+      const newArtist = cs.artist === extractedArtist ? originalParsedArtist : extractedArtist;
+
+      return { ...prev, currentSong: { ...cs, artist: newArtist } };
+    });
+  };
+
+  const handleEditArtist = (songId: string, newArtist: string) => {
+  const trimmed = newArtist.trim();
+  if (!trimmed) return;
+
+  setSongs((prev) => prev.map((s) => (s.id === songId ? { ...s, artist: trimmed } : s)));
+  setPlayerState((prev) =>
+    prev.currentSong?.id === songId
+      ? { ...prev, currentSong: { ...prev.currentSong, artist: trimmed } }
+      : prev
+  );
+};
 
   const seekRelative = (deltaSeconds: number) => {
   const audio = audioRef.current;
@@ -352,6 +394,8 @@ useEffect(() => {
           songs={songs}
           currentSong={playerState.currentSong}
           onSelectSong={handleSelectSong}
+          onSwapArtistTitle ={handleSwapArtistTitle}
+          onEditArtist={handleEditArtist}
         />
         {showNowPlaying && playerState.currentSong && (
           <NowPlaying
