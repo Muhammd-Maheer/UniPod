@@ -11,7 +11,7 @@ export const TitleBar: React.FC<TitleBarProps> = ({ isConnected, driveName }) =>
       <div className="title-bar-brand">UniPod</div>
       <div className={`drive-status ${isConnected ? 'connected' : 'disconnected'}`}>
         <span className="status-dot" />
-        {isConnected ? `Connected to ${driveName}` : 'No drive connected'}
+        {isConnected ? `Connected to ${driveName}` : 'No Data Detected'}
       </div>
     </header>
   );
