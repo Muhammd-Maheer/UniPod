@@ -242,6 +242,28 @@ const handleToggleMute = () => {
   );
 };
 
+
+const handleRemoveSong = (songId: string) => {
+    setSongs((prev) => prev.filter((s) => s.id !== songId));
+    setPlayOrder((prev) => prev.filter((id) => id !== songId));
+
+    setPlayerState((prev) => {
+      if (prev.currentSong?.id === songId) {
+        if (audioRef.current) {
+          audioRef.current.pause();
+          audioRef.current.src = '';
+        }
+        return {
+          ...prev,
+          currentSong: null,
+          isPlaying: false,
+          currentTime: 0,
+        };
+      }
+      return prev;
+    });
+  };
+
   const seekRelative = (deltaSeconds: number) => {
   const audio = audioRef.current;
   if (!audio || !playerState.currentSong) return;
@@ -396,6 +418,7 @@ useEffect(() => {
           onSelectSong={handleSelectSong}
           onSwapArtistTitle ={handleSwapArtistTitle}
           onEditArtist={handleEditArtist}
+          onRemoveSong={handleRemoveSong}
         />
         {showNowPlaying && playerState.currentSong && (
           <NowPlaying

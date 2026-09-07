@@ -514,6 +514,14 @@ button {
   color: var(--text);
 }
 
+.song-row.active .btn-swap {
+  color: #ffffff;
+}
+
+.song-row.active .btn-swap:hover {
+  color: #000000;
+}
+
 
 .artist-edit-input {
   font-size: 0.9rem;
@@ -524,4 +532,128 @@ button {
   border-radius: 4px;
   padding: 2px 6px;
   width: 130px;
+}
+
+
+/* Dropdown Menu */
+.action-cell {
+  position: relative;
+  text-align: center;
+}
+
+.dropdown-menu {
+  position: absolute;
+  right: 10px;
+  top: 80%;
+  background: var(--card-bg, #1e1e1e);
+  border: 1px solid var(--border, #333);
+  border-radius: 6px;
+  padding: 4px;
+  z-index: 100;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  min-width: 160px;
+}
+
+.dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  background: transparent;
+  border: none;
+  color: var(--text, #fff);
+  font-size: 13px;
+  cursor: pointer;
+  border-radius: 4px;
+  text-align: left;
+}
+
+.dropdown-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.dropdown-item.danger {
+  color: #ff4d4f;
+}
+
+.dropdown-item.danger:hover {
+  background: rgba(255, 77, 79, 0.15);
+}
+
+/* Center Confirmation Modal */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(2px);
+}
+
+.modal-container {
+  background: var(--card-bg, #1e1e1e);
+  border: 1px solid var(--border, #333);
+  border-radius: 10px;
+  padding: 20px 24px;
+  width: 90%;
+  max-width: 380px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.modal-container h3 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.modal-container p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-sub, #aaa);
+  line-height: 1.4;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.btn-modal {
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.2s ease;
+}
+
+.btn-cancel {
+  background: transparent;
+  border-color: var(--border, #444);
+  color: var(--text, #fff);
+}
+
+.btn-cancel:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.btn-danger {
+  background: #ff4d4f;
+  color: #ffffff;
+}
+
+.btn-danger:hover {
+  background: #d9363e;
 }
