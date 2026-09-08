@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Song, ViewMode, Playlist } from '../types';
 import { TruncatedTitle } from './TruncatedTitle';
-import { ArrowLeftRight, Pencil, Check, MoreVertical, Trash2, Folder, ArrowLeft, Search } from 'lucide-react';
+import { ArrowLeftRight, Pencil, Check, MoreVertical, Trash2, Folder, ArrowLeft, Search, ListPlus } from 'lucide-react';
 
 interface ViewContainerProps {
   currentView: ViewMode;
@@ -15,6 +15,7 @@ interface ViewContainerProps {
   onCreatePlaylist: (name: string) => void;
   onRenamePlaylist: (playlistId: string, newName: string) => void;
   onAddSongsToPlaylist: (playlistId: string, songIds: string[]) => void;
+  onRemoveSongFromPlaylist: (playlistId: string, songId: string) => void;
 }
 
 export const ViewContainer: React.FC<ViewContainerProps> = ({
@@ -29,6 +30,7 @@ export const ViewContainer: React.FC<ViewContainerProps> = ({
   onCreatePlaylist,
   onRenamePlaylist,
   onAddSongsToPlaylist,
+  onRemoveSongFromPlaylist
 }) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
@@ -42,6 +44,8 @@ export const ViewContainer: React.FC<ViewContainerProps> = ({
   const [showAddSongsModal, setShowAddSongsModal] = useState(false);
   const [songsToAdd, setSongsToAdd] = useState<Set<string>>(new Set());
   const [modalSearchQuery, setModalSearchQuery] = useState('');
+  const [songForPlaylistPicker, setSongForPlaylistPicker] = useState<Song | null>(null);
+  const [playlistPickerSearch, setPlaylistPickerSearch] = useState('');
 
   useEffect(() => {
     if (currentView !== 'playlists') {
@@ -90,6 +94,12 @@ export const ViewContainer: React.FC<ViewContainerProps> = ({
         song.artist.toLowerCase().includes(query)
       );
     });
+
+  const insidePlaylist = currentView === 'playlists' && !!selectedPlaylist;
+
+  const filteredPickerPlaylists = playlists.filter((p) =>
+    p.name.toLowerCase().includes(playlistPickerSearch.toLowerCase().trim())
+  );
 
   useEffect(() => {
     const handleClickOutside = () => setOpenMenuId(null);
@@ -226,15 +236,39 @@ export const ViewContainer: React.FC<ViewContainerProps> = ({
                     {openMenuId === song.id && (
                       <div className="dropdown-menu">
                         <button
-                          className="dropdown-item danger"
+                          className="dropdown-item"
                           onClick={() => {
-                            setSongToDelete(song);
+                            setSongForPlaylistPicker(song);
+                            setPlaylistPickerSearch('');
                             setOpenMenuId(null);
                           }}
                         >
-                          <Trash2 size={14} />
-                          <span>Remove from app</span>
+                          <ListPlus size={14} />
+                          <span>Add to playlist</span>
                         </button>
+                        {insidePlaylist ? (
+                          <button
+                            className="dropdown-item danger"
+                            onClick={() => {
+                              onRemoveSongFromPlaylist(selectedPlaylist!.id, song.id);
+                              setOpenMenuId(null);
+                            }}
+                          >
+                            <Trash2 size={14} />
+                            <span>Remove from playlist</span>
+                          </button>
+                        ) : (
+                          <button
+                            className="dropdown-item danger"
+                            onClick={() => {
+                              setSongToDelete(song);
+                              setOpenMenuId(null);
+                            }}
+                          >
+                            <Trash2 size={14} />
+                            <span>Remove from app</span>
+                          </button>
+                        )}
                       </div>
                     )}
                   </td>
@@ -407,6 +441,66 @@ export const ViewContainer: React.FC<ViewContainerProps> = ({
                 }}
               >
                 Add
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+            {songForPlaylistPicker && (
+        <div className="modal-overlay" onClick={() => setSongForPlaylistPicker(null)}>
+          <div className="modal-container" onClick={(e) => e.stopPropagation()}>
+            <h3>Add "{songForPlaylistPicker.title}" to Playlist</h3>
+            <div style={{ position: 'relative', marginBottom: '12px' }}>
+              <Search
+                size={16}
+                style={{
+                  position: 'absolute',
+                  left: '10px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  color: 'var(--text-sub)',
+                }}
+              />
+              <input
+                className="artist-edit-input"
+                style={{ paddingLeft: '32px', width: '100%', boxSizing: 'border-box' }}
+                placeholder="Search playlists..."
+                value={playlistPickerSearch}
+                onChange={(e) => setPlaylistPickerSearch(e.target.value)}
+                autoFocus
+              />
+            </div>
+            <div className="song-picker-list">
+              {playlists.length === 0 ? (
+                <p style={{ color: 'var(--text-sub)' }}>No playlists yet — create one from the Playlists tab.</p>
+              ) : filteredPickerPlaylists.length === 0 ? (
+                <p style={{ color: 'var(--text-sub)' }}>No playlists match "{playlistPickerSearch}".</p>
+              ) : (
+                filteredPickerPlaylists.map((playlist) => {
+                  const alreadyIn = playlist.songIds.includes(songForPlaylistPicker.id);
+                  return (
+                    <label key={playlist.id} className="song-picker-item">
+                      <input
+                        type="checkbox"
+                        checked={alreadyIn}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            onAddSongsToPlaylist(playlist.id, [songForPlaylistPicker.id]);
+                          } else {
+                            onRemoveSongFromPlaylist(playlist.id, songForPlaylistPicker.id);
+                          }
+                        }}
+                      />
+                      <span>{playlist.name}</span>
+                    </label>
+                  );
+                })
+              )}
+            </div>
+            <div className="modal-actions">
+              <button className="btn-modal btn-cancel" onClick={() => setSongForPlaylistPicker(null)}>
+                Done
               </button>
             </div>
           </div>
