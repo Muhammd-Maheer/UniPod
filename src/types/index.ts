@@ -21,3 +21,9 @@ export interface PlayerState {
   shuffle: boolean;
   repeatMode: RepeatMode;
 }
+
+export interface Playlist {
+  id: string;
+  name: string;
+  songIds: string[];
+}
