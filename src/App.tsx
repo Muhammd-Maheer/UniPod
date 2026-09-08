@@ -8,7 +8,7 @@ import { Player } from './components/Player';
 import { PlayerState, Song, ViewMode } from './types';
 import { NowPlaying } from './components/NowPlaying';
 import { parseFilenameForMetadata, extractArtistName } from './utils/parseFilename';
-import { readDir } from '@tauri-apps/plugin-fs';
+import { readDir, watch } from '@tauri-apps/plugin-fs';
 import './App.css';
 
 
@@ -16,6 +16,8 @@ const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<ViewMode>('songs');
   const [songs, setSongs] = useState<Song[]>([]);
   const [playOrder, setPlayOrder] = useState<string[]>([]);
+  const watchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const songsRef = useRef<Song[]>([]);
   const audioRef = useRef<HTMLAudioElement>(null);
   const rightPressRef = useRef(0);
   const leftPressRef = useRef(0);
@@ -67,6 +69,20 @@ const App: React.FC = () => {
     }
     playSongById(playOrder[nextIdx]);
   };
+
+  const buildSongFromPath = (path: string): Song => {
+  const fileName = path.split(/[/\\]/).pop() || 'Unknown';
+  const nameWithoutExt = fileName.replace(/\.[^/.]+$/, '');
+  const parsed = parseFilenameForMetadata(nameWithoutExt);
+  return {
+    id: crypto.randomUUID(),
+    title: nameWithoutExt,
+    artist: parsed.artist || 'Unknown Artist',
+    album: 'Unknown Album',
+    duration: 0,
+    path,
+  };
+};
 
   const handleAddSongs = async () => {
     const selected = await open({
@@ -306,6 +322,32 @@ const scanDirectory = async (dirPath: string): Promise<string[]> => {
     return audioPaths;
   };
 
+  const syncFolder = async (folderPath: string) => {
+  const foundPaths = await scanDirectory(folderPath);
+  const existingPaths = new Set(songsRef.current.map((s) => s.path));
+  const newSongs = foundPaths.filter((p) => !existingPaths.has(p)).map(buildSongFromPath);
+
+  if (newSongs.length > 0) {
+    setSongs((prev) => [...prev, ...newSongs]);
+    setPlayOrder((prev) => [...prev, ...newSongs.map((s) => s.id)]);
+  }
+};
+
+const startWatchingFolder = async (folderPath: string) => {
+  try {
+    await watch(
+      folderPath,
+      () => {
+        if (watchDebounceRef.current) clearTimeout(watchDebounceRef.current);
+        watchDebounceRef.current = setTimeout(() => syncFolder(folderPath), 1000);
+      },
+      { recursive: true }
+    );
+  } catch (err) {
+    console.error('Could not watch folder:', folderPath, err);
+  }
+};
+
   const handleScanFolder = async () => {
     const selected = await open({
       directory: true,
@@ -334,7 +376,10 @@ const scanDirectory = async (dirPath: string): Promise<string[]> => {
 
     setSongs((prev) => [...prev, ...newSongs]);
     setPlayOrder((prev) => [...prev, ...newSongs.map((s) => s.id)]);
+    startWatchingFolder(folderPath);
   };
+
+  
 
 const skipToNext = () => {
   if (playOrder.length <= 1 || !playerState.currentSong) return;
@@ -449,6 +494,10 @@ useEffect(() => {
   };
 }, [playerState.currentSong, playerState.duration, playOrder, songs]);
 
+
+useEffect(() => {
+  songsRef.current = songs;
+}, [songs]);
 
 useEffect(() => {
   const handleRepeatShuffleKeys = (e: KeyboardEvent) => {
