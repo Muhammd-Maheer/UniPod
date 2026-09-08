@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Song, ViewMode } from '../types';
 import { TruncatedTitle } from './TruncatedTitle';
-import { ArrowLeftRight, Pencil, Check, MoreVertical, Trash2 } from 'lucide-react';
+import { ArrowLeftRight, Pencil, Check, MoreVertical, Trash2, Folder, ArrowLeft } from 'lucide-react';
 
 interface ViewContainerProps {
   currentView: ViewMode;
@@ -26,6 +26,30 @@ export const ViewContainer: React.FC<ViewContainerProps> = ({
   const [editValue, setEditValue] = useState('');
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [songToDelete, setSongToDelete] = useState<Song | null>(null);
+  const [selectedArtist, setSelectedArtist] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (currentView !== 'artists') {
+      setSelectedArtist(null);
+    }
+  }, [currentView]);
+
+  const artistGroups = (() => {
+    const map = new Map<string, Song[]>();
+    songs.forEach((song) => {
+      const key = song.artist || 'Unknown Artist';
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(song);
+    });
+    const known = [...map.keys()].filter((a) => a !== 'Unknown Artist').sort((a, b) => a.localeCompare(b));
+    const ordered = map.has('Unknown Artist') ? [...known, 'Unknown Artist'] : known;
+    return ordered.map((name) => ({ name, songs: map.get(name)! }));
+  })();
+
+  const visibleSongs =
+    currentView === 'artists' && selectedArtist
+      ? songs.filter((s) => (s.artist || 'Unknown Artist') === selectedArtist)
+      : songs;
 
   // Close dropdown menu when clicking anywhere outside
   useEffect(() => {
@@ -53,10 +77,12 @@ export const ViewContainer: React.FC<ViewContainerProps> = ({
   return (
     <main className="main-view">
       <div className="view-header">
-        <h1 style={{ textTransform: 'capitalize' }}>{currentView}</h1>
+          <h1 style={{ textTransform: 'capitalize' }}>
+          {currentView === 'artists' && selectedArtist ? selectedArtist : currentView}
+        </h1>
       </div>
 
-      {currentView === 'songs' && (
+      {(currentView === 'songs' || (currentView == "artists" && selectedArtist)) && (
         <table className="song-table">
           <thead>
             <tr>
@@ -69,7 +95,7 @@ export const ViewContainer: React.FC<ViewContainerProps> = ({
             </tr>
           </thead>
           <tbody>
-            {songs.map((song, index) => {
+            {visibleSongs.map((song, index) => {
               const isActive = currentSong?.id === song.id;
               return (
                 <tr
@@ -149,7 +175,31 @@ export const ViewContainer: React.FC<ViewContainerProps> = ({
         </table>
       )}
 
-      {currentView !== 'songs' && (
+      {currentView === 'artists' && !selectedArtist && (
+        <div className="folder-grid">
+          {artistGroups.length === 0 ? (
+            <p style={{ color: 'var(--text-sub)' }}>No songs yet.</p>
+          ) : (
+            artistGroups.map((group) => (
+              <button key={group.name} className="folder-card" onClick={() => setSelectedArtist(group.name)}>
+                <Folder size={32} />
+                <div className="folder-name">{group.name}</div>
+                <div className="folder-count">
+                  {group.songs.length} song{group.songs.length !== 1 ? 's' : ''}
+                </div>
+              </button>
+            ))
+          )}
+        </div>
+      )}
+
+      {currentView === 'artists' && selectedArtist && (
+        <button className="btn-back" onClick={() => setSelectedArtist(null)}>
+          <ArrowLeft size={14} /> Artists
+        </button>
+      )}
+
+      {currentView !== 'songs' && currentView !== 'artists' && (
         <p style={{ color: 'var(--text-sub)' }}>
           {currentView} view is under construction.
         </p>
