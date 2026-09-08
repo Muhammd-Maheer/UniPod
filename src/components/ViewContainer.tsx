@@ -16,6 +16,7 @@ interface ViewContainerProps {
   onRenamePlaylist: (playlistId: string, newName: string) => void;
   onAddSongsToPlaylist: (playlistId: string, songIds: string[]) => void;
   onRemoveSongFromPlaylist: (playlistId: string, songId: string) => void;
+  onDeletePlaylist: (playlistId: string) => void;
 }
 
 export const ViewContainer: React.FC<ViewContainerProps> = ({
@@ -30,7 +31,8 @@ export const ViewContainer: React.FC<ViewContainerProps> = ({
   onCreatePlaylist,
   onRenamePlaylist,
   onAddSongsToPlaylist,
-  onRemoveSongFromPlaylist
+  onRemoveSongFromPlaylist,
+  onDeletePlaylist
 }) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
@@ -46,6 +48,8 @@ export const ViewContainer: React.FC<ViewContainerProps> = ({
   const [modalSearchQuery, setModalSearchQuery] = useState('');
   const [songForPlaylistPicker, setSongForPlaylistPicker] = useState<Song | null>(null);
   const [playlistPickerSearch, setPlaylistPickerSearch] = useState('');
+  const [playlistToDelete, setPlaylistToDelete] = useState<Playlist | null>(null);
+  const [openPlaylistMenuId, setOpenPlaylistMenuId] = useState<string | null>(null);
 
   useEffect(() => {
     if (currentView !== 'playlists') {
@@ -79,6 +83,13 @@ export const ViewContainer: React.FC<ViewContainerProps> = ({
     return ordered.map((name) => ({ name, songs: map.get(name)! }));
   })();
 
+  const getPlaylistNamesForSong = (songId: string) => {
+    const matched = playlists
+     .filter((p) => p.songIds.includes(songId))
+      .map((p) => p.name);
+    return matched.length > 0 ? matched.join(', ') : 'No Playlist';
+  };
+
   const visibleSongs =
     currentView === 'artists' && selectedArtist
       ? songs.filter((s) => (s.artist || 'Unknown Artist') === selectedArtist)
@@ -102,7 +113,10 @@ export const ViewContainer: React.FC<ViewContainerProps> = ({
   );
 
   useEffect(() => {
-    const handleClickOutside = () => setOpenMenuId(null);
+    const handleClickOutside = () => {
+      setOpenMenuId(null);
+      setOpenPlaylistMenuId(null); // This is the missing line
+    };
     window.addEventListener('click', handleClickOutside);
     return () => window.removeEventListener('click', handleClickOutside);
   }, []);
@@ -170,7 +184,7 @@ export const ViewContainer: React.FC<ViewContainerProps> = ({
               <th style={{ width: '40px' }}>#</th>
               <th>Title</th>
               <th>Artist</th>
-              <th>Album</th>
+              <th>Playlist</th>
               <th style={{ width: '80px' }}>Duration</th>
               <th style={{ width: '40px' }}></th>
             </tr>
@@ -208,7 +222,7 @@ export const ViewContainer: React.FC<ViewContainerProps> = ({
                       </span>
                     ) : (
                       <span className="artist-cell">
-                        {song.artist}
+                       <span className='artist-name-text'>{song.artist}</span>
                         <button className="btn-swap" title="Edit artist" onClick={() => startEditing(song)}>
                           <Pencil size={13} />
                         </button>
@@ -222,8 +236,12 @@ export const ViewContainer: React.FC<ViewContainerProps> = ({
                       </span>
                     )}
                   </td>
-                  <td>{song.album}</td>
-                  <td>{formatTime(song.duration)}</td>
+                  <td>
+                  <span className="playlist-cell-text" title={getPlaylistNamesForSong(song.id)}>
+                    {getPlaylistNamesForSong(song.id)}
+                  </span>
+                </td>
+                <td>{formatTime(song.duration)}</td>
 
                   <td className="action-cell" onClick={(e) => e.stopPropagation()}>
                     <button
@@ -304,7 +322,7 @@ export const ViewContainer: React.FC<ViewContainerProps> = ({
       )}
 
       {currentView === 'playlists' && !selectedPlaylist && (
-        <>
+        <div className="playlists-view">
           <div className="playlist-create-row">
             <input
               className="artist-edit-input playlist-create-input"
@@ -334,21 +352,47 @@ export const ViewContainer: React.FC<ViewContainerProps> = ({
               <p style={{ color: 'var(--text-sub)' }}>No playlists yet — create one above.</p>
             ) : (
               playlists.map((playlist) => (
-                <button
-                  key={playlist.id}
-                  className="folder-card"
-                  onClick={() => setSelectedPlaylistId(playlist.id)}
-                >
+                <div key={playlist.id} className="folder-card" style={{ position: 'relative' }} onClick={() => setSelectedPlaylistId(playlist.id)}>
+                  <button
+                    className="playlist-options-btn"
+                    title="Playlist options"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setOpenPlaylistMenuId(openPlaylistMenuId === playlist.id ? null : playlist.id);
+                    }}
+                  >
+                    <MoreVertical size={16} />
+                  </button>
+
+                  {openPlaylistMenuId === playlist.id && (
+                    <div
+                      className="dropdown-menu"
+                      style={{ position: 'absolute', top: '35px', right: '10px', zIndex: 10 }}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <button
+                        className="dropdown-item danger"
+                        onClick={() => {
+                          setPlaylistToDelete(playlist);
+                          setOpenPlaylistMenuId(null);
+                        }}
+                      >
+                        <Trash2 size={14} />
+                        <span>Delete Playlist</span>
+                      </button>
+                    </div>
+                  )}
+
                   <Folder size={32} />
                   <div className="folder-name">{playlist.name}</div>
                   <div className="folder-count">
                     {playlist.songIds.length} song{playlist.songIds.length !== 1 ? 's' : ''}
                   </div>
-                </button>
+                </div>
               ))
             )}
           </div>
-        </>
+        </div>
       )}
 
       {currentView === 'playlists' && selectedPlaylist && (
@@ -447,7 +491,7 @@ export const ViewContainer: React.FC<ViewContainerProps> = ({
         </div>
       )}
 
-            {songForPlaylistPicker && (
+      {songForPlaylistPicker && (
         <div className="modal-overlay" onClick={() => setSongForPlaylistPicker(null)}>
           <div className="modal-container" onClick={(e) => e.stopPropagation()}>
             <h3>Add "{songForPlaylistPicker.title}" to Playlist</h3>
@@ -526,6 +570,31 @@ export const ViewContainer: React.FC<ViewContainerProps> = ({
                 }}
               >
                 Remove
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {playlistToDelete && (
+        <div className="modal-overlay" onClick={() => setPlaylistToDelete(null)}>
+          <div className="modal-container" onClick={(e) => e.stopPropagation()}>
+            <h3>Delete Playlist</h3>
+            <p>
+              Are you sure you want to delete the playlist <strong>"{playlistToDelete.name}"</strong>? This action cannot be undone.
+            </p>
+            <div className="modal-actions">
+              <button className="btn-modal btn-cancel" onClick={() => setPlaylistToDelete(null)}>
+                Cancel
+              </button>
+              <button
+                className="btn-modal btn-danger"
+                onClick={() => {
+                  onDeletePlaylist(playlistToDelete.id);
+                  setPlaylistToDelete(null);
+                }}
+              >
+                Delete
               </button>
             </div>
           </div>

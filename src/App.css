@@ -501,9 +501,17 @@ button {
 }
 
 .artist-cell {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 6px;
+  max-width: 200px;
+}
+
+.artist-name-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 
 .btn-swap {
@@ -775,4 +783,33 @@ button {
   background: var(--primary);
   color: #fff8f0;
   border: none;
+}
+
+.playlist-cell-text {
+  display: inline-block;
+  max-width: 160px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+}
+
+
+.playlist-options-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 10;
+  color: black; 
+  border-radius: 6px;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  cursor: pointer;
+}
+
+.playlist-options-btn:hover {
+  color: rgba(0, 0, 0, 0.9);
 }

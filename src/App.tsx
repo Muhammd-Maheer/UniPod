@@ -297,6 +297,10 @@ const App: React.FC = () => {
   );
 };
 
+const handleDeletePlaylist = (playlistId: string) => {
+  setPlaylists((prev) => prev.filter((p) => p.id !== playlistId));
+};
+
   const intentionalStopRef = useRef(false);
 
   const removeSongsByIds = (ids: string[]) => {
@@ -587,11 +591,19 @@ const App: React.FC = () => {
           onRenamePlaylist={handleRenamePlaylist}
           onAddSongsToPlaylist={handleAddSongsToPlaylist}
           onRemoveSongFromPlaylist={handleRemoveSongFromPlaylist}
+          onDeletePlaylist={handleDeletePlaylist}
         />
         {showNowPlaying && playerState.currentSong && (
           <NowPlaying
             state={playerState}
-            playlistName="No Playlist"
+            playlistName={
+              playerState.currentSong
+                ? playlists
+                    .filter((p) => p.songIds.includes(playerState.currentSong!.id))
+                    .map((p) => p.name)
+                    .join(', ') || 'No Playlist'
+                : 'No Playlist'
+            }
             onClose={() => setShowNowPlaying(false)}
             onTogglePlay={handleTogglePlay}
             onSeek={handleSeek}
