@@ -244,36 +244,39 @@ const handleToggleMute = () => {
 };
 
 
-const handleRemoveSong = (songId: string) => {
-    setSongs((prev) => prev.filter((s) => s.id !== songId));
-    setPlayOrder((prev) => prev.filter((id) => id !== songId));
+const intentionalStopRef = useRef(false);
 
-    setPlayerState((prev) => {
-      if (prev.currentSong?.id === songId) {
-        if (audioRef.current) {
-          audioRef.current.pause();
-          audioRef.current.src = '';
-        }
-        return {
-          ...prev,
-          currentSong: null,
-          isPlaying: false,
-          currentTime: 0,
-        };
+const removeSongsByIds = (ids: string[]) => {
+  if (ids.length === 0) return;
+  const idSet = new Set(ids);
+
+  setSongs((prev) => prev.filter((s) => !idSet.has(s.id)));
+  setPlayOrder((prev) => prev.filter((id) => !idSet.has(id)));
+
+  setPlayerState((prev) => {
+    if (prev.currentSong && idSet.has(prev.currentSong.id)) {
+      if (audioRef.current) {
+        intentionalStopRef.current = true;
+        audioRef.current.pause();
+        audioRef.current.src = '';
       }
-      return prev;
-    });
-  };
-
-  const seekRelative = (deltaSeconds: number) => {
-  const audio = audioRef.current;
-  if (!audio || !playerState.currentSong) return;
-  const max = playerState.duration || audio.duration || 0;
-  const newTime = Math.min(Math.max(audio.currentTime + deltaSeconds, 0), max);
-  audio.currentTime = newTime;
-  setPlayerState((prev) => ({ ...prev, currentTime: newTime }));
+      return { ...prev, currentSong: null, isPlaying: false, currentTime: 0 };
+    }
+    return prev;
+  });
 };
 
+const handleRemoveSong = (songId: string) => removeSongsByIds([songId]);
+
+const handleAudioError = () => {
+  if (intentionalStopRef.current) {
+    intentionalStopRef.current = false;
+    return;
+  }
+  if (playerState.currentSong) {
+    removeSongsByIds([playerState.currentSong.id]);
+  }
+};
 
 const scanDirectory = async (dirPath: string): Promise<string[]> => {
     let audioPaths: string[] = [];
@@ -347,6 +350,16 @@ const skipToPrevious = () => {
   playSongById(playOrder[prevIdx]);
 };
 
+
+const seekRelative = (deltaSeconds: number) => {
+  const audio = audioRef.current;
+  if (!audio || !playerState.currentSong) return;
+  const max = playerState.duration || audio.duration || 0;
+  const newTime = Math.min(Math.max(audio.currentTime + deltaSeconds, 0), max);
+  audio.currentTime = newTime;
+  setPlayerState((prev) => ({ ...prev, currentTime: newTime }));
+};
+
   useEffect(() => {
     if (audioRef.current) audioRef.current.volume = playerState.volume;
   }, []);
@@ -390,6 +403,8 @@ useEffect(() => {
   window.addEventListener('keydown', handleVolumeKeys);
   return () => window.removeEventListener('keydown', handleVolumeKeys);
 }, [playerState.volume]);
+
+
 
 useEffect(() => {
   const DOUBLE_PRESS_MS = 350;
@@ -467,7 +482,13 @@ useEffect(() => {
 
   return (
     <div className="app">
-      <audio ref={audioRef} onTimeUpdate={handleTimeUpdate} onLoadedMetadata={handleLoadedMetadata} onEnded={handleEnded} />
+      <audio 
+      ref={audioRef} 
+      onTimeUpdate={handleTimeUpdate} 
+      onLoadedMetadata={handleLoadedMetadata} 
+      onEnded={handleEnded}
+      onError={handleAudioError} 
+      />
       <TitleBar isConnected={false} driveName="My Music" />
       <div className="app-body">
         <Sidebar 
