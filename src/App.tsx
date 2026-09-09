@@ -78,9 +78,9 @@ const App: React.FC = () => {
       id: crypto.randomUUID(),
       title: nameWithoutExt,
       artist: parsed.artist || 'Unknown Artist',
-      album: 'Unknown Album',
       duration: 0,
       path,
+      isFavorite: false,
     };
   };
 
@@ -100,9 +100,9 @@ const App: React.FC = () => {
         id: crypto.randomUUID(),
         title: fileName.replace(/\.[^/.]+$/, ''),
         artist: parsed.artist || 'Unknown Artist',
-        album: 'Unknown Album',
         duration: 0,
         path,
+        isFavorite: false,
       };
     });
 
@@ -288,18 +288,17 @@ const App: React.FC = () => {
     );
   };
 
-
   const handleRemoveSongFromPlaylist = (playlistId: string, songId: string) => {
-  setPlaylists((prev) =>
-    prev.map((p) =>
-      p.id === playlistId ? { ...p, songIds: p.songIds.filter((id) => id !== songId) } : p
-    )
-  );
-};
+    setPlaylists((prev) =>
+      prev.map((p) =>
+        p.id === playlistId ? { ...p, songIds: p.songIds.filter((id) => id !== songId) } : p
+      )
+    );
+  };
 
-const handleDeletePlaylist = (playlistId: string) => {
-  setPlaylists((prev) => prev.filter((p) => p.id !== playlistId));
-};
+  const handleDeletePlaylist = (playlistId: string) => {
+    setPlaylists((prev) => prev.filter((p) => p.id !== playlistId));
+  };
 
   const intentionalStopRef = useRef(false);
 
@@ -408,15 +407,23 @@ const handleDeletePlaylist = (playlistId: string) => {
         id: crypto.randomUUID(),
         title: nameWithoutExt,
         artist: parsed.artist || 'Unknown Artist',
-        album: 'Unknown Album',
         duration: 0,
         path,
+        isFavorite: false,
       };
     });
 
     setSongs((prev) => [...prev, ...newSongs]);
     setPlayOrder((prev) => [...prev, ...newSongs.map((s) => s.id)]);
     startWatchingFolder(folderPath);
+  };
+
+  const handleToggleFavorite = (songId: string) => {
+    setSongs(prevSongs =>
+      prevSongs.map(song =>
+        song.id === songId ? { ...song, isFavorite: !song.isFavorite } : song
+      )
+    );
   };
 
   const skipToNext = () => {
@@ -592,6 +599,7 @@ const handleDeletePlaylist = (playlistId: string) => {
           onAddSongsToPlaylist={handleAddSongsToPlaylist}
           onRemoveSongFromPlaylist={handleRemoveSongFromPlaylist}
           onDeletePlaylist={handleDeletePlaylist}
+          onToggleFavorite={handleToggleFavorite}
         />
         {showNowPlaying && playerState.currentSong && (
           <NowPlaying

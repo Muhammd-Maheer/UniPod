@@ -1,6 +1,6 @@
 import React from 'react';
 import { ViewMode } from '../types';
-import { Plus, FolderSearch, Music, Disc, Mic } from 'lucide-react';
+import { Plus, FolderSearch, Music, Disc, Mic, Star } from 'lucide-react';
 
 interface SidebarProps {
   currentView: ViewMode;
@@ -26,10 +26,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
           Songs
         </button>
         <button
-          className={`nav-item ${currentView === 'albums' ? 'active' : ''}`}
-          onClick={() => onSelectView('albums')}
+          className={`nav-item ${currentView === 'favorites' ? 'active' : ''}`}
+          onClick={() => onSelectView('favorites')}
         >
-          Albums
+          <span>Favorites</span>
         </button>
         <button
           className={`nav-item ${currentView === 'artists' ? 'active' : ''}`}

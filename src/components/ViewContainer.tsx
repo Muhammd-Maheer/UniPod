@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Song, ViewMode, Playlist } from '../types';
 import { TruncatedTitle } from './TruncatedTitle';
-import { ArrowLeftRight, Pencil, Check, MoreVertical, Trash2, Folder, ArrowLeft, Search, ListPlus } from 'lucide-react';
+import { ArrowLeftRight, Pencil, Check, MoreVertical, Trash2, Folder, ArrowLeft, Search, ListPlus, Star } from 'lucide-react';
 
 interface ViewContainerProps {
   currentView: ViewMode;
@@ -17,6 +17,7 @@ interface ViewContainerProps {
   onAddSongsToPlaylist: (playlistId: string, songIds: string[]) => void;
   onRemoveSongFromPlaylist: (playlistId: string, songId: string) => void;
   onDeletePlaylist: (playlistId: string) => void;
+  onToggleFavorite: (songId: string) => void;
 }
 
 export const ViewContainer: React.FC<ViewContainerProps> = ({
@@ -32,7 +33,8 @@ export const ViewContainer: React.FC<ViewContainerProps> = ({
   onRenamePlaylist,
   onAddSongsToPlaylist,
   onRemoveSongFromPlaylist,
-  onDeletePlaylist
+  onDeletePlaylist,
+  onToggleFavorite
 }) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
@@ -95,6 +97,8 @@ export const ViewContainer: React.FC<ViewContainerProps> = ({
       ? songs.filter((s) => (s.artist || 'Unknown Artist') === selectedArtist)
       : currentView === 'playlists' && selectedPlaylist
       ? songs.filter((s) => selectedPlaylist.songIds.includes(s.id))
+      : currentView === 'favorites'
+      ? songs.filter((s) => s.isFavorite)
       : songs;
 
   const filteredModalSongs = songs.filter((song) => {
@@ -176,6 +180,7 @@ export const ViewContainer: React.FC<ViewContainerProps> = ({
       </div>
 
       {(currentView === 'songs' ||
+        (currentView) === 'favorites' ||
         (currentView === 'artists' && selectedArtist) ||
         (currentView === 'playlists' && selectedPlaylist)) && (
         <table className="song-table">
@@ -186,7 +191,7 @@ export const ViewContainer: React.FC<ViewContainerProps> = ({
               <th>Artist</th>
               <th>Playlist</th>
               <th style={{ width: '80px' }}>Duration</th>
-              <th style={{ width: '40px' }}></th>
+              <th style={{ width: '70px' }}></th>
             </tr>
           </thead>
           <tbody>
@@ -243,7 +248,19 @@ export const ViewContainer: React.FC<ViewContainerProps> = ({
                 </td>
                 <td>{formatTime(song.duration)}</td>
 
-                  <td className="action-cell" onClick={(e) => e.stopPropagation()}>
+                  <td className="action-cell"
+                   onClick={(e) => e.stopPropagation()}
+                   style={{ display: 'flex', justifyContent: 'flex-end', gap: '4px', alignItems: 'center' }}
+                   >
+                    <button
+                      className="btn-swap"
+                      title={song.isFavorite ? "Remove from Favorites" : "Add to Favorites"}
+                      onClick={() => onToggleFavorite(song.id)}
+                      style={{ color: song.isFavorite ? '#eab308' : 'inherit' }}
+                      >
+                        <Star size={15} fill={song.isFavorite ? '#eab308' : 'none'} />
+                    </button>
+
                     <button
                       className="btn-swap"
                       title="More options"
@@ -413,7 +430,7 @@ export const ViewContainer: React.FC<ViewContainerProps> = ({
         </div>
       )}
 
-      {currentView !== 'songs' && currentView !== 'artists' && currentView !== 'playlists' && (
+      {currentView !== 'songs' && currentView !== 'artists' && currentView !== 'playlists' && currentView !== 'favorites' && (
         <p style={{ color: 'var(--text-sub)' }}>{currentView} view is under construction.</p>
       )}
 

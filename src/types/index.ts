@@ -1,4 +1,4 @@
-export type ViewMode = 'songs' | 'albums' | 'artists' | 'playlists';
+export type ViewMode = 'songs' | 'albums' | 'artists' | 'playlists' | 'favorites';
 
 export type RepeatMode = 'off' | 'all' | 'one';
 
@@ -6,10 +6,10 @@ export interface Song {
   id: string;
   title: string;
   artist: string;
-  album: string;
   duration: number; // seconds
   path: string;
   artworkUrl?: string;
+  isFavorite: boolean;
 }
 
 export interface PlayerState {
