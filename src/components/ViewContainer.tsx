@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Song, ViewMode, Playlist } from '../types';
 import { TruncatedTitle } from './TruncatedTitle';
-import { ArrowLeftRight, Pencil, Check, MoreVertical, Trash2, Folder, ArrowLeft, Search, ListPlus, Star } from 'lucide-react';
+import { ArrowLeftRight, Pencil, Check, MoreVertical, Trash2, Folder, ArrowLeft, Search, ListPlus, Star, Menu } from 'lucide-react';
 
 interface ViewContainerProps {
   currentView: ViewMode;
@@ -16,6 +16,7 @@ interface ViewContainerProps {
   onRenamePlaylist: (playlistId: string, newName: string) => void;
   onAddSongsToPlaylist: (playlistId: string, songIds: string[]) => void;
   onRemoveSongFromPlaylist: (playlistId: string, songId: string) => void;
+  onReorderSongs: (orderedVisibleIds: string[], playlistId?: string) => void;
   onDeletePlaylist: (playlistId: string) => void;
   onToggleFavorite: (songId: string) => void;
 }
@@ -33,6 +34,7 @@ export const ViewContainer: React.FC<ViewContainerProps> = ({
   onRenamePlaylist,
   onAddSongsToPlaylist,
   onRemoveSongFromPlaylist,
+  onReorderSongs,
   onDeletePlaylist,
   onToggleFavorite
 }) => {
@@ -52,6 +54,9 @@ export const ViewContainer: React.FC<ViewContainerProps> = ({
   const [playlistPickerSearch, setPlaylistPickerSearch] = useState('');
   const [playlistToDelete, setPlaylistToDelete] = useState<Playlist | null>(null);
   const [openPlaylistMenuId, setOpenPlaylistMenuId] = useState<string | null>(null);
+  const [draggedSongId, setDraggedSongId] = useState<string | null>(null);
+  const [dropTargetSongId, setDropTargetSongId] = useState<string | null>(null);
+  const draggedSongRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (currentView !== 'playlists') {
@@ -96,7 +101,9 @@ export const ViewContainer: React.FC<ViewContainerProps> = ({
     currentView === 'artists' && selectedArtist
       ? songs.filter((s) => (s.artist || 'Unknown Artist') === selectedArtist)
       : currentView === 'playlists' && selectedPlaylist
-      ? songs.filter((s) => selectedPlaylist.songIds.includes(s.id))
+      ? selectedPlaylist.songIds
+          .map((songId) => songs.find((song) => song.id === songId))
+          .filter((song): song is Song => !!song)
       : currentView === 'favorites'
       ? songs.filter((s) => s.isFavorite)
       : songs;
@@ -111,6 +118,44 @@ export const ViewContainer: React.FC<ViewContainerProps> = ({
     });
 
   const insidePlaylist = currentView === 'playlists' && !!selectedPlaylist;
+
+  const reorderSongs = (targetSongId: string | null) => {
+    if (!draggedSongId || !targetSongId || draggedSongId === targetSongId) return;
+
+    const reorderedIds = visibleSongs.map((song) => song.id);
+    const draggedIndex = reorderedIds.indexOf(draggedSongId);
+    const targetIndex = reorderedIds.indexOf(targetSongId);
+    if (draggedIndex < 0 || targetIndex < 0) return;
+
+    const [draggedId] = reorderedIds.splice(draggedIndex, 1);
+    reorderedIds.splice(targetIndex, 0, draggedId);
+    onReorderSongs(reorderedIds, insidePlaylist ? selectedPlaylist?.id : undefined);
+    setDraggedSongId(null);
+    setDropTargetSongId(null);
+  };
+
+  useEffect(() => {
+    const handlePointerMove = (event: PointerEvent) => {
+      if (!draggedSongRef.current) return;
+
+      const element = document.elementFromPoint(event.clientX, event.clientY);
+      const row = element?.closest<HTMLElement>('[data-song-id]');
+      setDropTargetSongId(row?.dataset.songId || null);
+    };
+
+    const handlePointerUp = () => {
+      if (!draggedSongRef.current) return;
+      reorderSongs(dropTargetSongId);
+      draggedSongRef.current = null;
+    };
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+    };
+  }, [draggedSongId, dropTargetSongId, visibleSongs, insidePlaylist, selectedPlaylist]);
 
   const filteredPickerPlaylists = playlists.filter((p) =>
     p.name.toLowerCase().includes(playlistPickerSearch.toLowerCase().trim())
@@ -200,10 +245,27 @@ export const ViewContainer: React.FC<ViewContainerProps> = ({
               return (
                 <tr
                   key={song.id}
-                  className={`song-row ${isActive ? 'active' : ''}`}
+                  data-song-id={song.id}
+                  className={`song-row ${isActive ? 'active' : ''} ${draggedSongId === song.id ? 'dragging' : ''} ${dropTargetSongId === song.id ? 'drop-target' : ''}`}
                   onClick={() => onSelectSong(song, visibleSongs)}
                 >
-                  <td>{index + 1}</td>
+                  <td className="song-position-cell">
+                    <span className="song-position-number">{index + 1}</span>
+                    <button
+                      className="song-drag-handle"
+                      type="button"
+                      title="Drag to reorder"
+                      onClick={(e) => e.stopPropagation()}
+                      onPointerDown={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        draggedSongRef.current = song.id;
+                        setDraggedSongId(song.id);
+                      }}
+                    >
+                      <Menu size={16} />
+                    </button>
+                  </td>
                   <td className="song-title-cell">
                     <TruncatedTitle title={song.title} />
                   </td>

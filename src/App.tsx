@@ -296,6 +296,27 @@ const App: React.FC = () => {
     );
   };
 
+  const handleReorderSongs = (orderedVisibleIds: string[], playlistId?: string) => {
+    if (playlistId) {
+      setPlaylists((prev) =>
+        prev.map((playlist) =>
+          playlist.id === playlistId ? { ...playlist, songIds: orderedVisibleIds } : playlist
+        )
+      );
+      return;
+    }
+
+    const visibleIdSet = new Set(orderedVisibleIds);
+    setSongs((prev) => {
+      let visibleIndex = 0;
+      return prev.map((song) => {
+        if (!visibleIdSet.has(song.id)) return song;
+        const nextSongId = orderedVisibleIds[visibleIndex++];
+        return prev.find((candidate) => candidate.id === nextSongId) || song;
+      });
+    });
+  };
+
   const handleDeletePlaylist = (playlistId: string) => {
     setPlaylists((prev) => prev.filter((p) => p.id !== playlistId));
   };
@@ -598,6 +619,7 @@ const App: React.FC = () => {
           onRenamePlaylist={handleRenamePlaylist}
           onAddSongsToPlaylist={handleAddSongsToPlaylist}
           onRemoveSongFromPlaylist={handleRemoveSongFromPlaylist}
+          onReorderSongs={handleReorderSongs}
           onDeletePlaylist={handleDeletePlaylist}
           onToggleFavorite={handleToggleFavorite}
         />

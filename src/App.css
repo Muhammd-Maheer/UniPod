@@ -181,6 +181,51 @@ button {
   border-bottom-color: var(--primary);
 }
 
+.song-position-cell {
+  position: relative;
+  width: 40px;
+  text-align: center;
+}
+
+.song-position-number {
+  display: inline-block;
+}
+
+.song-drag-handle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  padding: 0;
+  background: none;
+  color: inherit;
+  cursor: grab;
+}
+
+.song-drag-handle:active {
+  cursor: grabbing;
+}
+
+.song-row:hover .song-position-number,
+.song-row.dragging .song-position-number {
+  display: none;
+}
+
+.song-row:hover .song-drag-handle,
+.song-row.dragging .song-drag-handle {
+  display: inline-flex;
+}
+
+.song-row.dragging {
+  opacity: 0.55;
+}
+
+.song-row.drop-target td {
+  border-top: 2px solid var(--primary);
+}
+
 .song-title-cell {
   font-weight: 600;
 }
