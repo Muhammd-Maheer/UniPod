@@ -1,6 +1,6 @@
 import React from 'react';
 import { ViewMode } from '../types';
-import { Plus, FolderSearch, Music, Disc, Mic, Star } from 'lucide-react';
+import { FolderSearch} from 'lucide-react';
 
 interface SidebarProps {
   currentView: ViewMode;
