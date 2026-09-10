@@ -81,17 +81,47 @@ button {
 }
 
 .sidebar {
+  position: relative;
   width: 220px;
   flex-shrink: 0;
   background: var(--sidebar-bg);
   border-right: 1px solid var(--border);
   padding: 22px 14px;
   overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.sidebar.collapsed {
+  width: 52px;
+  padding: 14px 8px;
+}
+
+.sidebar-toggle {
+  position: absolute;
+  top: 14px;
+  left: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  margin: 0;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--text-sub);
+  cursor: pointer;
+}
+
+.sidebar-toggle:hover {
+  background: rgba(58, 42, 26, 0.08);
+  color: var(--text);
 }
 
 .sidebar h2 {
   font-size: 1rem;
   font-weight: 700;
+  margin-left: 44px;
   margin-bottom: 16px;
 }
 
@@ -216,6 +246,21 @@ button {
 .song-row:hover .song-drag-handle,
 .song-row.dragging .song-drag-handle {
   display: inline-flex;
+}
+
+.song-row-missing {
+  color: var(--text-sub);
+}
+
+.song-row-missing .song-title-cell {
+  color: var(--text-sub);
+}
+
+.missing-indicator {
+  display: inline-flex;
+  margin-right: 7px;
+  color: var(--primary);
+  vertical-align: middle;
 }
 
 .song-row.dragging {
@@ -857,4 +902,17 @@ button {
 
 .playlist-options-btn:hover {
   color: rgba(0, 0, 0, 0.9);
+}
+
+
+.missing-indicator {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 6px;
+  color: #d9363e;
+  vertical-align: middle;
+}
+
+.song-row-missing {
+  opacity: 0.55;
 }

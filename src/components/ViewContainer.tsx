@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Song, ViewMode, Playlist } from '../types';
 import { TruncatedTitle } from './TruncatedTitle';
-import { ArrowLeftRight, Pencil, Check, MoreVertical, Trash2, Folder, ArrowLeft, Search, ListPlus, Star, Menu } from 'lucide-react';
+import { ArrowLeftRight, Pencil, Check, MoreVertical, Trash2, Folder, ArrowLeft, Search, ListPlus, Star, Menu, FileX } from 'lucide-react';
 
 interface ViewContainerProps {
   currentView: ViewMode;
@@ -120,15 +120,26 @@ export const ViewContainer: React.FC<ViewContainerProps> = ({
   const insidePlaylist = currentView === 'playlists' && !!selectedPlaylist;
 
   const reorderSongs = (targetSongId: string | null) => {
-    if (!draggedSongId || !targetSongId || draggedSongId === targetSongId) return;
+    if (!draggedSongId) return;
+
+    if (!targetSongId || draggedSongId === targetSongId) {
+      setDraggedSongId(null);
+      setDropTargetSongId(null);
+      return;
+    }
 
     const reorderedIds = visibleSongs.map((song) => song.id);
     const draggedIndex = reorderedIds.indexOf(draggedSongId);
     const targetIndex = reorderedIds.indexOf(targetSongId);
-    if (draggedIndex < 0 || targetIndex < 0) return;
+    if (draggedIndex < 0 || targetIndex < 0) {
+      setDraggedSongId(null);
+      setDropTargetSongId(null);
+      return;
+    }
 
     const [draggedId] = reorderedIds.splice(draggedIndex, 1);
-    reorderedIds.splice(targetIndex, 0, draggedId);
+    const adjustedTargetIndex = reorderedIds.indexOf(targetSongId);
+    reorderedIds.splice(adjustedTargetIndex, 0, draggedId);
     onReorderSongs(reorderedIds, insidePlaylist ? selectedPlaylist?.id : undefined);
     setDraggedSongId(null);
     setDropTargetSongId(null);
@@ -149,11 +160,20 @@ export const ViewContainer: React.FC<ViewContainerProps> = ({
       draggedSongRef.current = null;
     };
 
+    const handlePointerCancel = () => {
+      if (!draggedSongRef.current) return;
+      draggedSongRef.current = null;
+      setDraggedSongId(null);
+      setDropTargetSongId(null);
+    };
+
     window.addEventListener('pointermove', handlePointerMove);
     window.addEventListener('pointerup', handlePointerUp);
+    window.addEventListener('pointercancel', handlePointerCancel);
     return () => {
       window.removeEventListener('pointermove', handlePointerMove);
       window.removeEventListener('pointerup', handlePointerUp);
+      window.removeEventListener('pointercancel', handlePointerCancel);
     };
   }, [draggedSongId, dropTargetSongId, visibleSongs, insidePlaylist, selectedPlaylist]);
 
@@ -246,7 +266,7 @@ export const ViewContainer: React.FC<ViewContainerProps> = ({
                 <tr
                   key={song.id}
                   data-song-id={song.id}
-                  className={`song-row ${isActive ? 'active' : ''} ${draggedSongId === song.id ? 'dragging' : ''} ${dropTargetSongId === song.id ? 'drop-target' : ''}`}
+                  className={`song-row ${isActive ? 'active' : ''} ${song.isMissing ? 'song-row-missing' : ''} ${draggedSongId === song.id ? 'dragging' : ''} ${dropTargetSongId === song.id ? 'drop-target' : ''}`}
                   onClick={() => onSelectSong(song, visibleSongs)}
                 >
                   <td className="song-position-cell">
@@ -267,6 +287,11 @@ export const ViewContainer: React.FC<ViewContainerProps> = ({
                     </button>
                   </td>
                   <td className="song-title-cell">
+                    {song.isMissing && (
+                      <span className="missing-indicator" title="No data detected — file not found">
+                        <FileX size={14} />
+                      </span>
+                    )}
                     <TruncatedTitle title={song.title} />
                   </td>
                   <td onClick={(e) => e.stopPropagation()}>

@@ -1,24 +1,37 @@
 import React from 'react';
 import { ViewMode } from '../types';
-import { FolderSearch} from 'lucide-react';
+import { FolderSearch, Menu } from 'lucide-react';
 
 interface SidebarProps {
   currentView: ViewMode;
   onSelectView: (view: ViewMode) => void;
   onAddSongs: () => void;
   onScanFolder: () => void;
+  collapsed: boolean;
+  onToggleCollapsed: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ 
   currentView, 
   onSelectView, 
   onAddSongs,
-  onScanFolder
+  onScanFolder,
+  collapsed,
+  onToggleCollapsed
  }) => {
   return (
-    <aside className="sidebar">
-      <h2>My Music</h2>
-      <nav className="nav-group">
+    <aside className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
+      <button
+        className="sidebar-toggle"
+        type="button"
+        title={collapsed ? 'Open sidebar' : 'Close sidebar'}
+        aria-label={collapsed ? 'Open sidebar' : 'Close sidebar'}
+        onClick={onToggleCollapsed}
+      >
+        <Menu size={18} />
+      </button>
+      {!collapsed && <h2>My Music</h2>}
+      {!collapsed && <nav className="nav-group">
         <button
           className={`nav-item ${currentView === 'songs' ? 'active' : ''}`}
           onClick={() => onSelectView('songs')}
@@ -43,12 +56,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
         >
           Playlists
         </button>
-      </nav>
-      <button className='btn-add-songs' onClick={onAddSongs}>+ Add Songs</button>
-      <button className="btn-add-songs" onClick={onScanFolder}>
+      </nav>}
+      {!collapsed && <>
+        <button className='btn-add-songs' onClick={onAddSongs}>+ Add Songs</button>
+        <button className="btn-add-songs" onClick={onScanFolder}>
           <FolderSearch size={16} />
           <span>Scan Folder</span>
-      </button>
+        </button>
+      </>}
     </aside>
   );
 };

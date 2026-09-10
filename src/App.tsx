@@ -11,8 +11,12 @@ import { parseFilenameForMetadata, extractArtistName } from './utils/parseFilena
 import { readDir, watch } from '@tauri-apps/plugin-fs';
 import './App.css';
 
+const getBasename = (path: string) => path.split(/[/\\]/).pop() || '';
+const getSongKey = (path: string) => getBasename(path).replace(/\.[^/.]+$/, '').toLocaleLowerCase();
+
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<ViewMode>('songs');
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [songs, setSongs] = useState<Song[]>([]);
   const [playOrder, setPlayOrder] = useState<string[]>([]);
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
@@ -71,7 +75,7 @@ const App: React.FC = () => {
   };
 
   const buildSongFromPath = (path: string): Song => {
-    const fileName = path.split(/[/\\]/).pop() || 'Unknown';
+    const fileName = getBasename(path) || 'Unknown';
     const nameWithoutExt = fileName.replace(/\.[^/.]+$/, '');
     const parsed = parseFilenameForMetadata(nameWithoutExt);
     return {
@@ -81,6 +85,7 @@ const App: React.FC = () => {
       duration: 0,
       path,
       isFavorite: false,
+      isMissing: false,
     };
   };
 
@@ -103,6 +108,7 @@ const App: React.FC = () => {
         duration: 0,
         path,
         isFavorite: false,
+        isMissing: false,
       };
     });
 
@@ -111,6 +117,7 @@ const App: React.FC = () => {
   };
 
   const handleSelectSong = (song: Song, contextSongs?: Song[]) => {
+    if (song.isMissing) return;
     const list = contextSongs && contextSongs.length > 0 ? contextSongs : songs;
     let newPlayOrder = list.map((s) => s.id);
 
@@ -298,23 +305,36 @@ const App: React.FC = () => {
 
   const handleReorderSongs = (orderedVisibleIds: string[], playlistId?: string) => {
     if (playlistId) {
+      const playlist = playlists.find((candidate) => candidate.id === playlistId);
       setPlaylists((prev) =>
         prev.map((playlist) =>
           playlist.id === playlistId ? { ...playlist, songIds: orderedVisibleIds } : playlist
         )
       );
+
+      if (
+        playlist &&
+        playlist.songIds.length === playOrder.length &&
+        playlist.songIds.every((songId) => playOrder.includes(songId))
+      ) {
+        setPlayOrder(orderedVisibleIds);
+      }
       return;
     }
 
     const visibleIdSet = new Set(orderedVisibleIds);
-    setSongs((prev) => {
-      let visibleIndex = 0;
-      return prev.map((song) => {
-        if (!visibleIdSet.has(song.id)) return song;
-        const nextSongId = orderedVisibleIds[visibleIndex++];
-        return prev.find((candidate) => candidate.id === nextSongId) || song;
-      });
-    });
+    const reorderedVisibleSongs = orderedVisibleIds
+      .map((songId) => songs.find((song) => song.id === songId))
+      .filter((song): song is Song => !!song);
+    let visibleIndex = 0;
+    const reorderedSongs = songs.map((song) =>
+      visibleIdSet.has(song.id) ? reorderedVisibleSongs[visibleIndex++] : song
+    );
+    setSongs(() => reorderedSongs);
+
+    if (!playerState.shuffle) {
+      setPlayOrder(reorderedSongs.map((song) => song.id));
+    }
   };
 
   const handleDeletePlaylist = (playlistId: string) => {
@@ -350,9 +370,15 @@ const App: React.FC = () => {
       intentionalStopRef.current = false;
       return;
     }
-    if (playerState.currentSong) {
-      removeSongsByIds([playerState.currentSong.id]);
+    const missingSong = playerState.currentSong;
+    if (!missingSong) return;
+
+    setSongs((prev) => prev.map((s) => (s.id === missingSong.id ? { ...s, isMissing: true } : s)));
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.src = '';
     }
+    setPlayerState((prev) => ({ ...prev, currentSong: null, isPlaying: false, currentTime: 0 }));
   };
 
   const scanDirectory = async (dirPath: string): Promise<string[]> => {
@@ -384,11 +410,39 @@ const App: React.FC = () => {
 
   const syncFolder = async (folderPath: string) => {
     const foundPaths = await scanDirectory(folderPath);
-    const existingPaths = new Set(songsRef.current.map((s) => s.path));
-    const newSongs = foundPaths.filter((p) => !existingPaths.has(p)).map(buildSongFromPath);
+    const foundByName = new Map<string, string>();
+    foundPaths.forEach((path) => foundByName.set(getSongKey(path), path));
 
+    const normalizedFolder = folderPath.replace(/[/\\]+$/, '').replace(/\\/g, '/').toLocaleLowerCase();
+    const belongsToFolder = (path: string) => {
+      const normalizedPath = path.replace(/\\/g, '/').toLocaleLowerCase();
+      return normalizedPath.startsWith(`${normalizedFolder}/`);
+    };
+
+    const currentSongs = songsRef.current;
+    const matchedNames = new Set<string>();
+
+    const updatedSongs = currentSongs.map((song) => {
+      if (!belongsToFolder(song.path)) return song;
+      const name = getSongKey(song.path);
+      const foundPath = foundByName.get(name);
+
+      if (foundPath) {
+        matchedNames.add(name);
+        if (song.isMissing || song.path !== foundPath) {
+          return { ...song, path: foundPath, isMissing: false };
+        }
+        return song;
+      }
+
+      return song.isMissing ? song : { ...song, isMissing: true };
+    });
+
+    const newPaths = foundPaths.filter((path) => !matchedNames.has(getSongKey(path)));
+    const newSongs = newPaths.map(buildSongFromPath);
+
+    setSongs([...updatedSongs, ...newSongs]);
     if (newSongs.length > 0) {
-      setSongs((prev) => [...prev, ...newSongs]);
       setPlayOrder((prev) => [...prev, ...newSongs.map((s) => s.id)]);
     }
   };
@@ -416,26 +470,7 @@ const App: React.FC = () => {
     if (!selected) return;
 
     const folderPath = Array.isArray(selected) ? selected[0] : selected;
-    const foundAudioPaths = await scanDirectory(folderPath);
-
-    if (foundAudioPaths.length === 0) return;
-
-    const newSongs: Song[] = foundAudioPaths.map((path) => {
-      const fileName = path.split(/[/\\]/).pop() || 'Unknown';
-      const nameWithoutExt = fileName.replace(/\.[^/.]+$/, '');
-      const parsed = parseFilenameForMetadata(nameWithoutExt);
-      return {
-        id: crypto.randomUUID(),
-        title: nameWithoutExt,
-        artist: parsed.artist || 'Unknown Artist',
-        duration: 0,
-        path,
-        isFavorite: false,
-      };
-    });
-
-    setSongs((prev) => [...prev, ...newSongs]);
-    setPlayOrder((prev) => [...prev, ...newSongs.map((s) => s.id)]);
+    await syncFolder(folderPath);
     startWatchingFolder(folderPath);
   };
 
@@ -605,6 +640,8 @@ const App: React.FC = () => {
           onSelectView={setCurrentView}
           onAddSongs={handleAddSongs}
           onScanFolder={handleScanFolder}
+          collapsed={isSidebarCollapsed}
+          onToggleCollapsed={() => setIsSidebarCollapsed((collapsed) => !collapsed)}
         />
         <ViewContainer
           currentView={currentView}

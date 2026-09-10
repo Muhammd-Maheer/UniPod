@@ -10,6 +10,7 @@ export interface Song {
   path: string;
   artworkUrl?: string;
   isFavorite: boolean;
+  isMissing: boolean;
 }
 
 export interface PlayerState {
