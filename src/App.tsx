@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { convertFileSrc } from '@tauri-apps/api/core';
+import { invoke } from '@tauri-apps/api/core';
 import { TitleBar } from './components/TitleBar';
 import { Sidebar } from './components/Sidebar';
 import { ViewContainer } from './components/ViewContainer';
@@ -74,7 +75,16 @@ const App: React.FC = () => {
     playSongById(playOrder[nextIdx]);
   };
 
-  const buildSongFromPath = (path: string): Song => {
+  const getArtworkUrl = async (path: string): Promise<string | undefined> => {
+    try {
+      return await invoke<string | null>('get_embedded_artwork', { path }) || undefined;
+    } catch (error) {
+      console.error('Failed to read embedded artwork:', path, error);
+      return undefined;
+    }
+  };
+
+  const buildSongFromPath = async (path: string): Promise<Song> => {
     const fileName = getBasename(path) || 'Unknown';
     const nameWithoutExt = fileName.replace(/\.[^/.]+$/, '');
     const parsed = parseFilenameForMetadata(nameWithoutExt);
@@ -84,6 +94,7 @@ const App: React.FC = () => {
       artist: parsed.artist || 'Unknown Artist',
       duration: 0,
       path,
+      artworkUrl: await getArtworkUrl(path),
       isFavorite: false,
       isMissing: false,
     };
@@ -97,20 +108,7 @@ const App: React.FC = () => {
     if (!selected) return;
 
     const paths = Array.isArray(selected) ? selected : [selected];
-    const newSongs: Song[] = paths.map((path) => {
-      const fileName = path.split(/[/\\]/).pop() || 'Unknown';
-      const nameWithoutExt = fileName.replace(/\.[^/.]+$/, '');
-      const parsed = parseFilenameForMetadata(nameWithoutExt);
-      return {
-        id: crypto.randomUUID(),
-        title: fileName.replace(/\.[^/.]+$/, ''),
-        artist: parsed.artist || 'Unknown Artist',
-        duration: 0,
-        path,
-        isFavorite: false,
-        isMissing: false,
-      };
-    });
+    const newSongs = await Promise.all(paths.map(buildSongFromPath));
 
     setSongs((prev) => [...prev, ...newSongs]);
     setPlayOrder((prev) => [...prev, ...newSongs.map((s) => s.id)]);
@@ -439,7 +437,7 @@ const App: React.FC = () => {
     });
 
     const newPaths = foundPaths.filter((path) => !matchedNames.has(getSongKey(path)));
-    const newSongs = newPaths.map(buildSongFromPath);
+    const newSongs = await Promise.all(newPaths.map(buildSongFromPath));
 
     setSongs([...updatedSongs, ...newSongs]);
     if (newSongs.length > 0) {
