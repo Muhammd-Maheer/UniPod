@@ -1,6 +1,7 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use lofty::{prelude::TaggedFileExt, probe::Probe};
+use walkdir::WalkDir;
 
 #[tauri::command]
 fn greet(name: &str) -> String {
@@ -33,13 +34,39 @@ fn get_embedded_artwork(path: &str) -> Result<Option<String>, String> {
     )))
 }
 
+#[tauri::command]
+fn scan_disk_for_audio(root: &str) -> Vec<String> {
+    WalkDir::new(root)
+        .follow_links(false)
+        .into_iter()
+        .filter_map(Result::ok)
+        .filter(|entry| {
+            entry.file_type().is_file()
+                && entry
+                    .path()
+                    .extension()
+                    .and_then(|extension| extension.to_str())
+                    .is_some_and(|extension| {
+                        ["mp3", "wav", "flac", "m4a", "ogg"]
+                            .iter()
+                            .any(|allowed| extension.eq_ignore_ascii_case(allowed))
+                    })
+        })
+        .map(|entry| entry.path().to_string_lossy().into_owned())
+        .collect()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
-        .invoke_handler(tauri::generate_handler![greet, get_embedded_artwork])
+        .invoke_handler(tauri::generate_handler![
+            greet,
+            get_embedded_artwork,
+            scan_disk_for_audio
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

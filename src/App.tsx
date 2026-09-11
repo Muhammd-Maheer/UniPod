@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
-import { convertFileSrc } from '@tauri-apps/api/core';
-import { invoke } from '@tauri-apps/api/core';
+import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 import { TitleBar } from './components/TitleBar';
 import { Sidebar } from './components/Sidebar';
 import { ViewContainer } from './components/ViewContainer';
@@ -21,7 +20,9 @@ const App: React.FC = () => {
   const [songs, setSongs] = useState<Song[]>([]);
   const [playOrder, setPlayOrder] = useState<string[]>([]);
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
+  const [isScanningDevice, setIsScanningDevice] = useState(false);
   const watchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const artworkLoadingRef = useRef(new Set<string>());
   const songsRef = useRef<Song[]>([]);
   const audioRef = useRef<HTMLAudioElement>(null);
   const rightPressRef = useRef(0);
@@ -56,6 +57,23 @@ const App: React.FC = () => {
       currentTime: 0,
       isPlaying: true,
     }));
+
+    if (!song.artworkUrl && !artworkLoadingRef.current.has(song.path)) {
+      artworkLoadingRef.current.add(song.path);
+      getArtworkUrl(song.path)
+        .then((artworkUrl) => {
+          if (!artworkUrl) return;
+          setSongs((prev) => prev.map((item) => (
+            item.path === song.path ? { ...item, artworkUrl } : item
+          )));
+          setPlayerState((prev) => (
+            prev.currentSong?.path === song.path
+              ? { ...prev, currentSong: { ...prev.currentSong, artworkUrl } }
+              : prev
+          ));
+        })
+        .finally(() => artworkLoadingRef.current.delete(song.path));
+    }
   };
 
   const advance = (direction: 1 | -1) => {
@@ -94,7 +112,6 @@ const App: React.FC = () => {
       artist: parsed.artist || 'Unknown Artist',
       duration: 0,
       path,
-      artworkUrl: await getArtworkUrl(path),
       isFavorite: false,
       isMissing: false,
     };
@@ -472,6 +489,37 @@ const App: React.FC = () => {
     startWatchingFolder(folderPath);
   };
 
+  const handleScanDisk = async () => {
+    if (isScanningDevice) return;
+    const selected = await open({
+      directory: true,
+      multiple: false,
+    });
+    if (!selected) return;
+
+    setIsScanningDevice(true);
+
+    try {
+      const diskPath = Array.isArray(selected) ? selected[0] : selected;
+      const paths = await invoke<string[]>('scan_disk_for_audio', { root: diskPath });
+      const existingPaths = new Set(songsRef.current.map((song) => song.path.toLowerCase()));
+      const uniquePaths = Array.from(
+        new Map(paths.map((path) => [path.toLowerCase(), path])).values()
+      );
+      const newPaths = uniquePaths.filter((path) => !existingPaths.has(path.toLowerCase()));
+      const newSongs = await Promise.all(newPaths.map(buildSongFromPath));
+
+      if (newSongs.length > 0) {
+        setSongs((prev) => [...prev, ...newSongs]);
+        setPlayOrder((prev) => [...prev, ...newSongs.map((song) => song.id)]);
+      }
+    } catch (error) {
+      console.error('Could not scan the disk:', error);
+    } finally {
+      setIsScanningDevice(false);
+    }
+  };
+
   const handleToggleFavorite = (songId: string) => {
     setSongs(prevSongs =>
       prevSongs.map(song =>
@@ -638,6 +686,8 @@ const App: React.FC = () => {
           onSelectView={setCurrentView}
           onAddSongs={handleAddSongs}
           onScanFolder={handleScanFolder}
+          onScanDevice={handleScanDisk}
+          isScanningDevice={isScanningDevice}
           collapsed={isSidebarCollapsed}
           onToggleCollapsed={() => setIsSidebarCollapsed((collapsed) => !collapsed)}
         />

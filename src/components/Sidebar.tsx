@@ -1,12 +1,14 @@
 import React from 'react';
 import { ViewMode } from '../types';
-import { FolderSearch, Menu } from 'lucide-react';
+import { FolderSearch, HardDrive, Menu } from 'lucide-react';
 
 interface SidebarProps {
   currentView: ViewMode;
   onSelectView: (view: ViewMode) => void;
   onAddSongs: () => void;
   onScanFolder: () => void;
+  onScanDevice: () => void;
+  isScanningDevice: boolean;
   collapsed: boolean;
   onToggleCollapsed: () => void;
 }
@@ -16,6 +18,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onSelectView, 
   onAddSongs,
   onScanFolder,
+  onScanDevice,
+  isScanningDevice,
   collapsed,
   onToggleCollapsed
  }) => {
@@ -62,6 +66,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <button className="btn-add-songs" onClick={onScanFolder}>
           <FolderSearch size={16} />
           <span>Scan Folder</span>
+        </button>
+        <button className="btn-add-songs" onClick={onScanDevice} disabled={isScanningDevice}>
+          <HardDrive size={16} />
+          <span>{isScanningDevice ? 'Scanning Disk...' : 'Scan Disk'}</span>
         </button>
       </>}
     </aside>
