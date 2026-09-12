@@ -1,6 +1,7 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use lofty::{prelude::TaggedFileExt, probe::Probe};
+use tauri_plugin_sql::{Migration, MigrationKind};
 use walkdir::WalkDir;
 
 #[tauri::command]
@@ -58,6 +59,13 @@ fn scan_disk_for_audio(root: &str) -> Vec<String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let migrations = vec![Migration {
+        version: 1,
+        description: "create_initial_tables",
+        sql: include_str!("../migrations/001_initial.sql"),
+        kind: MigrationKind::Up,
+    }];
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
@@ -67,6 +75,11 @@ pub fn run() {
             get_embedded_artwork,
             scan_disk_for_audio
         ])
+        .plugin(
+            tauri_plugin_sql::Builder::default()
+                .add_migrations("sqlite:unipod.db", migrations)
+                .build(),
+        )
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
