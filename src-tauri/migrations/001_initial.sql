@@ -15,7 +15,6 @@ CREATE TABLE songs (
     relative_path TEXT NOT NULL,
     title TEXT NOT NULL,
     artist_id TEXT,
-    album TEXT,
     duration INTEGER NOT NULL DEFAULT 0,
     artwork_url TEXT,
     is_favorite INTEGER NOT NULL DEFAULT 0,

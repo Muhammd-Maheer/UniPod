@@ -5,7 +5,7 @@ import { TitleBar } from './components/TitleBar';
 import { Sidebar } from './components/Sidebar';
 import { ViewContainer } from './components/ViewContainer';
 import { Player } from './components/Player';
-import { PlayerState, Song, ViewMode, Playlist } from './types';
+import { PlayerState, Song, ViewMode, Playlist, PlaylistSong } from './types';
 import { NowPlaying } from './components/NowPlaying';
 import { parseFilenameForMetadata, extractArtistName } from './utils/parseFilename';
 import { readDir, watch } from '@tauri-apps/plugin-fs';
@@ -20,6 +20,7 @@ const App: React.FC = () => {
   const [songs, setSongs] = useState<Song[]>([]);
   const [playOrder, setPlayOrder] = useState<string[]>([]);
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
+  const [playlistSongs, setPlaylistSongs] = useState<PlaylistSong[]>([]);
   const [isScanningDevice, setIsScanningDevice] = useState(false);
   const watchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const artworkLoadingRef = useRef(new Set<string>());
@@ -47,7 +48,8 @@ const App: React.FC = () => {
     const audio = audioRef.current;
     if (!song || !audio) return;
 
-    audio.src = convertFileSrc(song.path);
+    const sourcePath = song.sourcePath ?? song.relativePath;
+    audio.src = convertFileSrc(sourcePath);
     audio.currentTime = 0;
     audio.play();
 
@@ -58,21 +60,22 @@ const App: React.FC = () => {
       isPlaying: true,
     }));
 
-    if (!song.artworkUrl && !artworkLoadingRef.current.has(song.path)) {
-      artworkLoadingRef.current.add(song.path);
-      getArtworkUrl(song.path)
+    if (!song.artworkUrl && !artworkLoadingRef.current.has(sourcePath)) {
+      artworkLoadingRef.current.add(sourcePath);
+      getArtworkUrl(sourcePath)
         .then((artworkUrl) => {
           if (!artworkUrl) return;
           setSongs((prev) => prev.map((item) => (
-            item.path === song.path ? { ...item, artworkUrl } : item
+            (item.sourcePath ?? item.relativePath) === sourcePath ? { ...item, artworkUrl } : item
           )));
-          setPlayerState((prev) => (
-            prev.currentSong?.path === song.path
+          setPlayerState((prev) => {
+            if (!prev.currentSong) return prev;
+            return (prev.currentSong.sourcePath ?? prev.currentSong.relativePath) === sourcePath
               ? { ...prev, currentSong: { ...prev.currentSong, artworkUrl } }
-              : prev
-          ));
+              : prev;
+          });
         })
-        .finally(() => artworkLoadingRef.current.delete(song.path));
+        .finally(() => artworkLoadingRef.current.delete(sourcePath));
     }
   };
 
@@ -108,12 +111,14 @@ const App: React.FC = () => {
     const parsed = parseFilenameForMetadata(nameWithoutExt);
     return {
       id: crypto.randomUUID(),
+      deviceId: 'local',
+      relativePath: path,
       title: nameWithoutExt,
-      artist: parsed.artist || 'Unknown Artist',
+      artistId: parsed.artist || 'Unknown Artist',
       duration: 0,
-      path,
       isFavorite: false,
       isMissing: false,
+      sourcePath: path,
     };
   };
 
@@ -257,9 +262,9 @@ const App: React.FC = () => {
         const extractedArtist = extractArtistName(s.title);
         const originalParsedArtist = parseFilenameForMetadata(s.title).artist || 'Unknown Artist';
 
-        const newArtist = s.artist === extractedArtist ? originalParsedArtist : extractedArtist;
+        const newArtist = s.artistId === extractedArtist ? originalParsedArtist : extractedArtist;
 
-        return { ...s, artist: newArtist };
+        return { ...s, artistId: newArtist };
       })
     );
 
@@ -269,9 +274,9 @@ const App: React.FC = () => {
 
       const extractedArtist = extractArtistName(cs.title);
       const originalParsedArtist = parseFilenameForMetadata(cs.title).artist || 'Unknown Artist';
-      const newArtist = cs.artist === extractedArtist ? originalParsedArtist : extractedArtist;
+      const newArtist = cs.artistId === extractedArtist ? originalParsedArtist : extractedArtist;
 
-      return { ...prev, currentSong: { ...cs, artist: newArtist } };
+      return { ...prev, currentSong: { ...cs, artistId: newArtist } };
     });
   };
 
@@ -279,10 +284,10 @@ const App: React.FC = () => {
     const trimmed = newArtist.trim();
     if (!trimmed) return;
 
-    setSongs((prev) => prev.map((s) => (s.id === songId ? { ...s, artist: trimmed } : s)));
+    setSongs((prev) => prev.map((s) => (s.id === songId ? { ...s, artistId: trimmed } : s)));
     setPlayerState((prev) =>
       prev.currentSong?.id === songId
-        ? { ...prev, currentSong: { ...prev.currentSong, artist: trimmed } }
+        ? { ...prev, currentSong: { ...prev.currentSong, artistId: trimmed } }
         : prev
     );
   };
@@ -290,7 +295,7 @@ const App: React.FC = () => {
   const handleCreatePlaylist = (name: string) => {
     const trimmed = name.trim();
     if (!trimmed) return;
-    const newPlaylist: Playlist = { id: crypto.randomUUID(), name: trimmed, songIds: [] };
+    const newPlaylist: Playlist = { id: crypto.randomUUID(), name: trimmed };
     setPlaylists((prev) => [...prev, newPlaylist]);
   };
 
@@ -301,36 +306,39 @@ const App: React.FC = () => {
   };
 
   const handleAddSongsToPlaylist = (playlistId: string, songIds: string[]) => {
-    setPlaylists((prev) =>
-      prev.map((p) => {
-        if (p.id !== playlistId) return p;
-        const merged = Array.from(new Set([...p.songIds, ...songIds]));
-        return { ...p, songIds: merged };
-      })
-    );
+    setPlaylistSongs((prev) => {
+      const existing = prev.filter((item) => item.playlistId === playlistId);
+      const existingIds = new Set(existing.map((item) => item.songId));
+      const additions = songIds
+        .filter((songId) => !existingIds.has(songId))
+        .map((songId, index) => ({ playlistId, songId, position: existing.length + index }));
+      return [...prev, ...additions];
+    });
   };
 
   const handleRemoveSongFromPlaylist = (playlistId: string, songId: string) => {
-    setPlaylists((prev) =>
-      prev.map((p) =>
-        p.id === playlistId ? { ...p, songIds: p.songIds.filter((id) => id !== songId) } : p
-      )
-    );
+    setPlaylistSongs((prev) => prev
+      .filter((item) => !(item.playlistId === playlistId && item.songId === songId))
+      .map((item, index) => item.playlistId === playlistId ? { ...item, position: index } : item));
   };
 
   const handleReorderSongs = (orderedVisibleIds: string[], playlistId?: string) => {
     if (playlistId) {
       const playlist = playlists.find((candidate) => candidate.id === playlistId);
-      setPlaylists((prev) =>
-        prev.map((playlist) =>
-          playlist.id === playlistId ? { ...playlist, songIds: orderedVisibleIds } : playlist
-        )
-      );
+      const currentPlaylistSongIds = playlistSongs
+        .filter((item) => item.playlistId === playlistId)
+        .sort((a, b) => a.position - b.position)
+        .map((item) => item.songId);
+      setPlaylistSongs((prev) => prev.map((item) => {
+        if (item.playlistId !== playlistId) return item;
+        const position = orderedVisibleIds.indexOf(item.songId);
+        return position >= 0 ? { ...item, position } : item;
+      }));
 
       if (
         playlist &&
-        playlist.songIds.length === playOrder.length &&
-        playlist.songIds.every((songId) => playOrder.includes(songId))
+        currentPlaylistSongIds.length === playOrder.length &&
+        currentPlaylistSongIds.every((songId) => playOrder.includes(songId))
       ) {
         setPlayOrder(orderedVisibleIds);
       }
@@ -354,6 +362,7 @@ const App: React.FC = () => {
 
   const handleDeletePlaylist = (playlistId: string) => {
     setPlaylists((prev) => prev.filter((p) => p.id !== playlistId));
+    setPlaylistSongs((prev) => prev.filter((item) => item.playlistId !== playlistId));
   };
 
   const intentionalStopRef = useRef(false);
@@ -438,14 +447,15 @@ const App: React.FC = () => {
     const matchedNames = new Set<string>();
 
     const updatedSongs = currentSongs.map((song) => {
-      if (!belongsToFolder(song.path)) return song;
-      const name = getSongKey(song.path);
+      const sourcePath = song.sourcePath ?? song.relativePath;
+      if (!belongsToFolder(sourcePath)) return song;
+      const name = getSongKey(sourcePath);
       const foundPath = foundByName.get(name);
 
       if (foundPath) {
         matchedNames.add(name);
-        if (song.isMissing || song.path !== foundPath) {
-          return { ...song, path: foundPath, isMissing: false };
+        if (song.isMissing || sourcePath !== foundPath) {
+          return { ...song, relativePath: foundPath, sourcePath: foundPath, isMissing: false };
         }
         return song;
       }
@@ -502,7 +512,7 @@ const App: React.FC = () => {
     try {
       const diskPath = Array.isArray(selected) ? selected[0] : selected;
       const paths = await invoke<string[]>('scan_disk_for_audio', { root: diskPath });
-      const existingPaths = new Set(songsRef.current.map((song) => song.path.toLowerCase()));
+      const existingPaths = new Set(songsRef.current.map((song) => (song.sourcePath ?? song.relativePath).toLowerCase()));
       const uniquePaths = Array.from(
         new Map(paths.map((path) => [path.toLowerCase(), path])).values()
       );
@@ -700,6 +710,7 @@ const App: React.FC = () => {
           onEditArtist={handleEditArtist}
           onRemoveSong={handleRemoveSong}
           playlists={playlists}
+          playlistSongs={playlistSongs}
           onCreatePlaylist={handleCreatePlaylist}
           onRenamePlaylist={handleRenamePlaylist}
           onAddSongsToPlaylist={handleAddSongsToPlaylist}
@@ -714,7 +725,7 @@ const App: React.FC = () => {
             playlistName={
               playerState.currentSong
                 ? playlists
-                    .filter((p) => p.songIds.includes(playerState.currentSong!.id))
+                  .filter((p) => playlistSongs.some((item) => item.playlistId === p.id && item.songId === playerState.currentSong!.id))
                     .map((p) => p.name)
                     .join(', ') || 'No Playlist'
                 : 'No Playlist'

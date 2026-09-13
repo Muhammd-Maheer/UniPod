@@ -1,16 +1,23 @@
-export type ViewMode = 'songs' | 'albums' | 'artists' | 'playlists' | 'favorites';
+export type ViewMode = 'songs' | 'artists' | 'playlists' | 'favorites';
 
 export type RepeatMode = 'off' | 'all' | 'one';
 
 export interface Song {
   id: string;
+  deviceId: string;
+  relativePath: string;
   title: string;
-  artist: string;
-  duration: number; // seconds
-  path: string;
+  artistId: string;
+  duration: number;
   artworkUrl?: string;
   isFavorite: boolean;
   isMissing: boolean;
+  sourcePath?: string;
+}
+
+export interface Artist {
+  id: string;
+  name: string;
 }
 
 export interface PlayerState {
@@ -26,5 +33,10 @@ export interface PlayerState {
 export interface Playlist {
   id: string;
   name: string;
-  songIds: string[];
+}
+
+export interface PlaylistSong {
+  playlistId: string;
+  songId: string;
+  position: number;
 }

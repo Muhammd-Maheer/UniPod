@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Song, ViewMode, Playlist } from '../types';
+import { Song, ViewMode, Playlist, PlaylistSong } from '../types';
 import { TruncatedTitle } from './TruncatedTitle';
 import { ArrowLeftRight, Pencil, Check, MoreVertical, Trash2, Folder, ArrowLeft, Search, ListPlus, Star, Menu, FileX } from 'lucide-react';
 
@@ -12,6 +12,7 @@ interface ViewContainerProps {
   onEditArtist: (songId: string, newArtist: string) => void;
   onRemoveSong: (songId: string) => void;
   playlists: Playlist[];
+  playlistSongs: PlaylistSong[];
   onCreatePlaylist: (name: string) => void;
   onRenamePlaylist: (playlistId: string, newName: string) => void;
   onAddSongsToPlaylist: (playlistId: string, songIds: string[]) => void;
@@ -30,6 +31,7 @@ export const ViewContainer: React.FC<ViewContainerProps> = ({
   onEditArtist,
   onRemoveSong,
   playlists,
+  playlistSongs,
   onCreatePlaylist,
   onRenamePlaylist,
   onAddSongsToPlaylist,
@@ -66,6 +68,10 @@ export const ViewContainer: React.FC<ViewContainerProps> = ({
   }, [currentView]);
 
   const selectedPlaylist = playlists.find((p) => p.id === selectedPlaylistId) || null;
+  const getPlaylistSongIds = (playlistId: string) => playlistSongs
+    .filter((item) => item.playlistId === playlistId)
+    .sort((a, b) => a.position - b.position)
+    .map((item) => item.songId);
 
   const commitPlaylistRename = () => {
     if (selectedPlaylist) onRenamePlaylist(selectedPlaylist.id, playlistNameDraft);
@@ -81,7 +87,7 @@ export const ViewContainer: React.FC<ViewContainerProps> = ({
   const artistGroups = (() => {
     const map = new Map<string, Song[]>();
     songs.forEach((song) => {
-      const key = song.artist || 'Unknown Artist';
+      const key = song.artistId || 'Unknown Artist';
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(song);
     });
@@ -92,16 +98,16 @@ export const ViewContainer: React.FC<ViewContainerProps> = ({
 
   const getPlaylistNamesForSong = (songId: string) => {
     const matched = playlists
-     .filter((p) => p.songIds.includes(songId))
+    .filter((p) => getPlaylistSongIds(p.id).includes(songId))
       .map((p) => p.name);
     return matched.length > 0 ? matched.join(', ') : 'No Playlist';
   };
 
   const visibleSongs =
     currentView === 'artists' && selectedArtist
-      ? songs.filter((s) => (s.artist || 'Unknown Artist') === selectedArtist)
+      ? songs.filter((s) => (s.artistId || 'Unknown Artist') === selectedArtist)
       : currentView === 'playlists' && selectedPlaylist
-      ? selectedPlaylist.songIds
+      ? getPlaylistSongIds(selectedPlaylist.id)
           .map((songId) => songs.find((song) => song.id === songId))
           .filter((song): song is Song => !!song)
       : currentView === 'favorites'
@@ -113,7 +119,7 @@ export const ViewContainer: React.FC<ViewContainerProps> = ({
       if (!query) return true;
       return (
         song.title.toLowerCase().includes(query) ||
-        song.artist.toLowerCase().includes(query)
+        song.artistId.toLowerCase().includes(query)
       );
     });
 
@@ -192,7 +198,7 @@ export const ViewContainer: React.FC<ViewContainerProps> = ({
 
   const startEditing = (song: Song) => {
     setEditingId(song.id);
-    setEditValue(song.artist);
+    setEditValue(song.artistId);
   };
 
   const commitEdit = (songId: string) => {
@@ -314,7 +320,7 @@ export const ViewContainer: React.FC<ViewContainerProps> = ({
                       </span>
                     ) : (
                       <span className="artist-cell">
-                       <span className='artist-name-text'>{song.artist}</span>
+                       <span className='artist-name-text'>{song.artistId}</span>
                         <button className="btn-swap" title="Edit artist" onClick={() => startEditing(song)}>
                           <Pencil size={13} />
                         </button>
@@ -490,7 +496,7 @@ export const ViewContainer: React.FC<ViewContainerProps> = ({
                   <Folder size={32} />
                   <div className="folder-name">{playlist.name}</div>
                   <div className="folder-count">
-                    {playlist.songIds.length} song{playlist.songIds.length !== 1 ? 's' : ''}
+                    {getPlaylistSongIds(playlist.id).length} song{getPlaylistSongIds(playlist.id).length !== 1 ? 's' : ''}
                   </div>
                 </div>
               ))
@@ -552,7 +558,7 @@ export const ViewContainer: React.FC<ViewContainerProps> = ({
                 <p style={{ color: 'var(--text-sub)' }}>No songs match "{modalSearchQuery}".</p>
               ) : (
                 filteredModalSongs.map((song) => {
-                  const alreadyIn = selectedPlaylist.songIds.includes(song.id);
+                  const alreadyIn = getPlaylistSongIds(selectedPlaylist.id).includes(song.id);
                   const checked = alreadyIn || songsToAdd.has(song.id);
                   return (
                     <label key={song.id} className="song-picker-item">
@@ -570,7 +576,7 @@ export const ViewContainer: React.FC<ViewContainerProps> = ({
                         }}
                       />
                       <span>
-                        {song.title} <span style={{ color: 'var(--text-sub)' }}>— {song.artist}</span>
+                        {song.title} <span style={{ color: 'var(--text-sub)' }}>— {song.artistId}</span>
                       </span>
                     </label>
                   );
@@ -626,7 +632,7 @@ export const ViewContainer: React.FC<ViewContainerProps> = ({
                 <p style={{ color: 'var(--text-sub)' }}>No playlists match "{playlistPickerSearch}".</p>
               ) : (
                 filteredPickerPlaylists.map((playlist) => {
-                  const alreadyIn = playlist.songIds.includes(songForPlaylistPicker.id);
+                  const alreadyIn = getPlaylistSongIds(playlist.id).includes(songForPlaylistPicker.id);
                   return (
                     <label key={playlist.id} className="song-picker-item">
                       <input

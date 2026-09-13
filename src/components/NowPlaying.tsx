@@ -55,7 +55,7 @@ export const NowPlaying: React.FC<NowPlayingProps> = ({
       </div>
 
       <div className="now-playing-title">{song ? song.title : 'No Track Selected'}</div>
-      <div className="now-playing-artist">{song ? song.artist || 'Unknown Artist' : '—'}</div>
+      <div className="now-playing-artist">{song ? song.artistId || 'Unknown Artist' : '—'}</div>
       <div className="now-playing-album">{playlistName}</div>
 
       <div className="now-playing-progress">
