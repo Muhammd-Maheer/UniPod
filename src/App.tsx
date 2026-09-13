@@ -9,10 +9,20 @@ import { PlayerState, Song, ViewMode, Playlist, PlaylistSong } from './types';
 import { NowPlaying } from './components/NowPlaying';
 import { parseFilenameForMetadata, extractArtistName } from './utils/parseFilename';
 import { readDir, watch } from '@tauri-apps/plugin-fs';
+import { getAllSongs, saveSong, deleteSong } from './database/songs';
+import { getOrCreateArtist } from './database/artists';
+import { getOrCreateDevice } from './database/devices';
+import {
+  deletePlaylist,
+  deletePlaylistSong,
+  getAllPlaylists,
+  getPlaylistSongs,
+  savePlaylist,
+  savePlaylistSong,
+} from './database/playlists';
 import './App.css';
 
 const getBasename = (path: string) => path.split(/[/\\]/).pop() || '';
-const getSongKey = (path: string) => getBasename(path).replace(/\.[^/.]+$/, '').toLocaleLowerCase();
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<ViewMode>('songs');
@@ -105,16 +115,18 @@ const App: React.FC = () => {
     }
   };
 
-  const buildSongFromPath = async (path: string): Promise<Song> => {
+  const buildSongFromPath = async (path: string, deviceId: string, relativePath: string): Promise<Song> => {
     const fileName = getBasename(path) || 'Unknown';
     const nameWithoutExt = fileName.replace(/\.[^/.]+$/, '');
     const parsed = parseFilenameForMetadata(nameWithoutExt);
+    const artist = await getOrCreateArtist(parsed.artist || 'Unknown Artist');
     return {
       id: crypto.randomUUID(),
-      deviceId: 'local',
-      relativePath: path,
+      deviceId,
+      relativePath,
       title: nameWithoutExt,
-      artistId: parsed.artist || 'Unknown Artist',
+      artistId: artist.id,
+      artistName: artist.name,
       duration: 0,
       isFavorite: false,
       isMissing: false,
@@ -130,7 +142,10 @@ const App: React.FC = () => {
     if (!selected) return;
 
     const paths = Array.isArray(selected) ? selected : [selected];
-    const newSongs = await Promise.all(paths.map(buildSongFromPath));
+    const device = await getOrCreateDevice('Local files', 'local-files');
+    const newSongs = await Promise.all(paths.map((path) => buildSongFromPath(path, device.id, path)));
+
+    await Promise.all(newSongs.map(saveSong));
 
     setSongs((prev) => [...prev, ...newSongs]);
     setPlayOrder((prev) => [...prev, ...newSongs.map((s) => s.id)]);
@@ -243,6 +258,8 @@ const App: React.FC = () => {
     setSongs((prev) =>
       prev.map((s) => (s.id === playerState.currentSong!.id ? { ...s, duration: realDuration } : s))
     );
+    const song = songsRef.current.find((item) => item.id === playerState.currentSong!.id);
+    if (song) void saveSong({ ...song, duration: realDuration });
   };
 
   const handleEnded = () => {
@@ -254,40 +271,35 @@ const App: React.FC = () => {
     advance(1);
   };
 
-  const handleSwapArtistTitle = (songId: string) => {
-    setSongs((prev) =>
-      prev.map((s) => {
-        if (s.id !== songId) return s;
-
-        const extractedArtist = extractArtistName(s.title);
-        const originalParsedArtist = parseFilenameForMetadata(s.title).artist || 'Unknown Artist';
-
-        const newArtist = s.artistId === extractedArtist ? originalParsedArtist : extractedArtist;
-
-        return { ...s, artistId: newArtist };
-      })
-    );
-
-    setPlayerState((prev) => {
-      if (prev.currentSong?.id !== songId) return prev;
-      const cs = prev.currentSong;
-
-      const extractedArtist = extractArtistName(cs.title);
-      const originalParsedArtist = parseFilenameForMetadata(cs.title).artist || 'Unknown Artist';
-      const newArtist = cs.artistId === extractedArtist ? originalParsedArtist : extractedArtist;
-
-      return { ...prev, currentSong: { ...cs, artistId: newArtist } };
-    });
+  const handleSwapArtistTitle = async (songId: string) => {
+    const currentSong = songsRef.current.find((song) => song.id === songId);
+    if (!currentSong) return;
+    const extractedArtist = extractArtistName(currentSong.title);
+    const originalParsedArtist = parseFilenameForMetadata(currentSong.title).artist || 'Unknown Artist';
+    const newArtist = (currentSong.artistName ?? '') === extractedArtist ? originalParsedArtist : extractedArtist;
+    const artist = await getOrCreateArtist(newArtist);
+    const updatedSong = { ...currentSong, artistId: artist.id, artistName: artist.name };
+    await saveSong(updatedSong);
+    setSongs((prev) => prev.map((song) => song.id === songId ? updatedSong : song));
+    setPlayerState((prev) => prev.currentSong?.id === songId
+      ? { ...prev, currentSong: updatedSong }
+      : prev);
   };
 
-  const handleEditArtist = (songId: string, newArtist: string) => {
+  const handleEditArtist = async (songId: string, newArtist: string) => {
     const trimmed = newArtist.trim();
     if (!trimmed) return;
 
-    setSongs((prev) => prev.map((s) => (s.id === songId ? { ...s, artistId: trimmed } : s)));
+    const artist = await getOrCreateArtist(trimmed);
+    const currentSong = songsRef.current.find((song) => song.id === songId);
+    if (!currentSong) return;
+    const updatedSong = { ...currentSong, artistId: artist.id, artistName: artist.name };
+    await saveSong(updatedSong);
+
+    setSongs((prev) => prev.map((s) => (s.id === songId ? updatedSong : s)));
     setPlayerState((prev) =>
       prev.currentSong?.id === songId
-        ? { ...prev, currentSong: { ...prev.currentSong, artistId: trimmed } }
+        ? { ...prev, currentSong: { ...prev.currentSong, artistId: artist.id, artistName: artist.name } }
         : prev
     );
   };
@@ -296,12 +308,14 @@ const App: React.FC = () => {
     const trimmed = name.trim();
     if (!trimmed) return;
     const newPlaylist: Playlist = { id: crypto.randomUUID(), name: trimmed };
+    void savePlaylist(newPlaylist);
     setPlaylists((prev) => [...prev, newPlaylist]);
   };
 
   const handleRenamePlaylist = (playlistId: string, newName: string) => {
     const trimmed = newName.trim();
     if (!trimmed) return;
+    void savePlaylist({ id: playlistId, name: trimmed });
     setPlaylists((prev) => prev.map((p) => (p.id === playlistId ? { ...p, name: trimmed } : p)));
   };
 
@@ -312,11 +326,13 @@ const App: React.FC = () => {
       const additions = songIds
         .filter((songId) => !existingIds.has(songId))
         .map((songId, index) => ({ playlistId, songId, position: existing.length + index }));
+      void Promise.all(additions.map(savePlaylistSong));
       return [...prev, ...additions];
     });
   };
 
   const handleRemoveSongFromPlaylist = (playlistId: string, songId: string) => {
+    void deletePlaylistSong(playlistId, songId);
     setPlaylistSongs((prev) => prev
       .filter((item) => !(item.playlistId === playlistId && item.songId === songId))
       .map((item, index) => item.playlistId === playlistId ? { ...item, position: index } : item));
@@ -334,6 +350,9 @@ const App: React.FC = () => {
         const position = orderedVisibleIds.indexOf(item.songId);
         return position >= 0 ? { ...item, position } : item;
       }));
+      void Promise.all(orderedVisibleIds.map((songId, position) =>
+        savePlaylistSong({ playlistId, songId, position })
+      ));
 
       if (
         playlist &&
@@ -361,6 +380,7 @@ const App: React.FC = () => {
   };
 
   const handleDeletePlaylist = (playlistId: string) => {
+    void deletePlaylist(playlistId);
     setPlaylists((prev) => prev.filter((p) => p.id !== playlistId));
     setPlaylistSongs((prev) => prev.filter((item) => item.playlistId !== playlistId));
   };
@@ -372,6 +392,7 @@ const App: React.FC = () => {
     const idSet = new Set(ids);
 
     setSongs((prev) => prev.filter((s) => !idSet.has(s.id)));
+    void Promise.all(ids.map(deleteSong));
     setPlayOrder((prev) => prev.filter((id) => !idSet.has(id)));
 
     setPlayerState((prev) => {
@@ -397,7 +418,9 @@ const App: React.FC = () => {
     const missingSong = playerState.currentSong;
     if (!missingSong) return;
 
-    setSongs((prev) => prev.map((s) => (s.id === missingSong.id ? { ...s, isMissing: true } : s)));
+    const updatedSong = { ...missingSong, isMissing: true };
+    void saveSong(updatedSong);
+    setSongs((prev) => prev.map((s) => (s.id === missingSong.id ? updatedSong : s)));
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.src = '';
@@ -432,44 +455,40 @@ const App: React.FC = () => {
     return audioPaths;
   };
 
-  const syncFolder = async (folderPath: string) => {
-    const foundPaths = await scanDirectory(folderPath);
-    const foundByName = new Map<string, string>();
-    foundPaths.forEach((path) => foundByName.set(getSongKey(path), path));
-
-    const normalizedFolder = folderPath.replace(/[/\\]+$/, '').replace(/\\/g, '/').toLocaleLowerCase();
-    const belongsToFolder = (path: string) => {
-      const normalizedPath = path.replace(/\\/g, '/').toLocaleLowerCase();
-      return normalizedPath.startsWith(`${normalizedFolder}/`);
-    };
-
+  const syncDevicePaths = async (rootPath: string, paths: string[]) => {
+    const device = await getOrCreateDevice(getBasename(rootPath) || 'Music device', rootPath);
     const currentSongs = songsRef.current;
-    const matchedNames = new Set<string>();
+    const deviceSongs = currentSongs.filter((song) => song.deviceId === device.id);
+    const existingByPath = new Map(deviceSongs.map((song) => [song.relativePath.toLocaleLowerCase(), song]));
+    const foundRelativePaths = new Set<string>();
+    const syncedSongs: Song[] = [];
 
-    const updatedSongs = currentSongs.map((song) => {
-      const sourcePath = song.sourcePath ?? song.relativePath;
-      if (!belongsToFolder(sourcePath)) return song;
-      const name = getSongKey(sourcePath);
-      const foundPath = foundByName.get(name);
-
-      if (foundPath) {
-        matchedNames.add(name);
-        if (song.isMissing || sourcePath !== foundPath) {
-          return { ...song, relativePath: foundPath, sourcePath: foundPath, isMissing: false };
-        }
-        return song;
-      }
-
-      return song.isMissing ? song : { ...song, isMissing: true };
-    });
-
-    const newPaths = foundPaths.filter((path) => !matchedNames.has(getSongKey(path)));
-    const newSongs = await Promise.all(newPaths.map(buildSongFromPath));
-
-    setSongs([...updatedSongs, ...newSongs]);
-    if (newSongs.length > 0) {
-      setPlayOrder((prev) => [...prev, ...newSongs.map((s) => s.id)]);
+    for (const path of paths) {
+      const relativePath = path
+        .replace(/\\/g, '/')
+        .replace(rootPath.replace(/\\/g, '/').replace(/\/$/, ''), '')
+        .replace(/^\//, '');
+      const existing = existingByPath.get(relativePath.toLocaleLowerCase());
+      const song = existing
+        ? { ...existing, sourcePath: path, isMissing: false }
+        : await buildSongFromPath(path, device.id, relativePath);
+      foundRelativePaths.add(relativePath.toLocaleLowerCase());
+      syncedSongs.push(song);
+      await saveSong(song);
     }
+
+    const missingSongs = deviceSongs.filter((song) => !foundRelativePaths.has(song.relativePath.toLocaleLowerCase()))
+      .map((song) => ({ ...song, sourcePath: undefined, isMissing: true }));
+    await Promise.all(missingSongs.map(saveSong));
+
+    const otherSongs = currentSongs.filter((song) => song.deviceId !== device.id);
+    const nextSongs = [...otherSongs, ...syncedSongs, ...missingSongs];
+    setSongs(nextSongs);
+    setPlayOrder(nextSongs.map((song) => song.id));
+  };
+
+  const syncFolder = async (folderPath: string) => {
+    await syncDevicePaths(folderPath, await scanDirectory(folderPath));
   };
 
   const startWatchingFolder = async (folderPath: string) => {
@@ -512,17 +531,8 @@ const App: React.FC = () => {
     try {
       const diskPath = Array.isArray(selected) ? selected[0] : selected;
       const paths = await invoke<string[]>('scan_disk_for_audio', { root: diskPath });
-      const existingPaths = new Set(songsRef.current.map((song) => (song.sourcePath ?? song.relativePath).toLowerCase()));
-      const uniquePaths = Array.from(
-        new Map(paths.map((path) => [path.toLowerCase(), path])).values()
-      );
-      const newPaths = uniquePaths.filter((path) => !existingPaths.has(path.toLowerCase()));
-      const newSongs = await Promise.all(newPaths.map(buildSongFromPath));
-
-      if (newSongs.length > 0) {
-        setSongs((prev) => [...prev, ...newSongs]);
-        setPlayOrder((prev) => [...prev, ...newSongs.map((song) => song.id)]);
-      }
+      const uniquePaths = Array.from(new Map(paths.map((path) => [path.toLowerCase(), path])).values());
+      await syncDevicePaths(diskPath, uniquePaths);
     } catch (error) {
       console.error('Could not scan the disk:', error);
     } finally {
@@ -531,11 +541,11 @@ const App: React.FC = () => {
   };
 
   const handleToggleFavorite = (songId: string) => {
-    setSongs(prevSongs =>
-      prevSongs.map(song =>
-        song.id === songId ? { ...song, isFavorite: !song.isFavorite } : song
-      )
-    );
+    const song = songsRef.current.find((item) => item.id === songId);
+    if (!song) return;
+    const updatedSong = { ...song, isFavorite: !song.isFavorite };
+    void saveSong(updatedSong);
+    setSongs((prevSongs) => prevSongs.map((item) => item.id === songId ? updatedSong : item));
   };
 
   const skipToNext = () => {
@@ -651,6 +661,40 @@ const App: React.FC = () => {
   useEffect(() => {
     songsRef.current = songs;
   }, [songs]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadLibrary = async () => {
+      try {
+        const [storedSongs, storedPlaylists] = await Promise.all([
+          getAllSongs(),
+          getAllPlaylists(),
+        ]);
+        const storedPlaylistSongs = (
+          await Promise.all(storedPlaylists.map((playlist) => getPlaylistSongs(playlist.id)))
+        ).flat();
+        if (cancelled) return;
+
+        const unavailableSongs = storedSongs.map((song) => ({
+          ...song,
+          sourcePath: undefined,
+          isMissing: true,
+        }));
+        setSongs(unavailableSongs);
+        setPlaylists(storedPlaylists);
+        setPlaylistSongs(storedPlaylistSongs);
+        setPlayOrder(unavailableSongs.map((song) => song.id));
+      } catch (error) {
+        console.error('Could not load the library database:', error);
+      }
+    };
+
+    void loadLibrary();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     const handleRepeatShuffleKeys = (e: KeyboardEvent) => {

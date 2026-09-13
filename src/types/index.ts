@@ -8,6 +8,7 @@ export interface Song {
   relativePath: string;
   title: string;
   artistId: string;
+  artistName?: string;
   duration: number;
   artworkUrl?: string;
   isFavorite: boolean;

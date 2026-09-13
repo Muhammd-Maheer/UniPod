@@ -87,7 +87,7 @@ export const ViewContainer: React.FC<ViewContainerProps> = ({
   const artistGroups = (() => {
     const map = new Map<string, Song[]>();
     songs.forEach((song) => {
-      const key = song.artistId || 'Unknown Artist';
+      const key = song.artistName || 'Unknown Artist';
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(song);
     });
@@ -105,7 +105,7 @@ export const ViewContainer: React.FC<ViewContainerProps> = ({
 
   const visibleSongs =
     currentView === 'artists' && selectedArtist
-      ? songs.filter((s) => (s.artistId || 'Unknown Artist') === selectedArtist)
+      ? songs.filter((s) => (s.artistName || 'Unknown Artist') === selectedArtist)
       : currentView === 'playlists' && selectedPlaylist
       ? getPlaylistSongIds(selectedPlaylist.id)
           .map((songId) => songs.find((song) => song.id === songId))
@@ -119,7 +119,7 @@ export const ViewContainer: React.FC<ViewContainerProps> = ({
       if (!query) return true;
       return (
         song.title.toLowerCase().includes(query) ||
-        song.artistId.toLowerCase().includes(query)
+        (song.artistName || 'Unknown Artist').toLowerCase().includes(query)
       );
     });
 
@@ -198,7 +198,7 @@ export const ViewContainer: React.FC<ViewContainerProps> = ({
 
   const startEditing = (song: Song) => {
     setEditingId(song.id);
-    setEditValue(song.artistId);
+    setEditValue(song.artistName || 'Unknown Artist');
   };
 
   const commitEdit = (songId: string) => {
@@ -320,7 +320,7 @@ export const ViewContainer: React.FC<ViewContainerProps> = ({
                       </span>
                     ) : (
                       <span className="artist-cell">
-                       <span className='artist-name-text'>{song.artistId}</span>
+                       <span className='artist-name-text'>{song.artistName || 'Unknown Artist'}</span>
                         <button className="btn-swap" title="Edit artist" onClick={() => startEditing(song)}>
                           <Pencil size={13} />
                         </button>
@@ -576,7 +576,7 @@ export const ViewContainer: React.FC<ViewContainerProps> = ({
                         }}
                       />
                       <span>
-                        {song.title} <span style={{ color: 'var(--text-sub)' }}>— {song.artistId}</span>
+                        {song.title} <span style={{ color: 'var(--text-sub)' }}>— {song.artistName || 'Unknown Artist'}</span>
                       </span>
                     </label>
                   );

@@ -45,7 +45,7 @@ export const Player: React.FC<PlayerProps> = ({
           {state.currentSong ? state.currentSong.title : 'No Track Selected'}
         </div>
         <div className="track-artist">
-          {state.currentSong ? state.currentSong.artistId : '—'}
+          {state.currentSong ? state.currentSong.artistName || 'Unknown Artist' : '—'}
         </div>
       </div>
 
