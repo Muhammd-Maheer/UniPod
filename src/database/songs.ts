@@ -16,9 +16,20 @@ export async function getAllSongs(): Promise<Song[]> {
   const rows = await db.select<SongRow[]>(
     `SELECT songs.*, artists.name AS artist_name
      FROM songs LEFT JOIN artists ON artists.id = songs.artist_id
-     ORDER BY songs.title`,
+     ORDER BY songs.sort_position IS NULL, songs.sort_position, songs.title`,
   );
 
+  return mapSongRows(rows);
+}
+
+export async function getFavoriteSongs(): Promise<Song[]> {
+  const db = await getDatabase();
+  const rows = await db.select<SongRow[]>('SELECT * FROM songs WHERE is_favorite = 1');
+
+  return mapSongRows(rows);
+}
+
+function mapSongRows(rows: SongRow[]): Song[] {
   return rows.map((row) => ({
     id: row.id,
     deviceId: row.device_id,
@@ -31,6 +42,21 @@ export async function getAllSongs(): Promise<Song[]> {
     isFavorite: row.is_favorite === 1,
     isMissing: row.is_missing === 1,
   }));
+}
+
+export async function setSongFavorite(songId: string, isFavorite: boolean): Promise<void> {
+  const db = await getDatabase();
+  await db.execute(
+    'UPDATE songs SET is_favorite = ? WHERE id = ?',
+    [isFavorite ? 1 : 0, songId],
+  );
+}
+
+export async function setSongOrder(songIds: string[]): Promise<void> {
+  const db = await getDatabase();
+  await Promise.all(songIds.map((songId, position) =>
+    db.execute('UPDATE songs SET sort_position = ? WHERE id = ?', [position, songId]),
+  ));
 }
 
 export async function saveSong(song: Song): Promise<void> {
@@ -64,4 +90,13 @@ export async function deleteSong(songId: string): Promise<void> {
   const db = await getDatabase();
   await db.execute('DELETE FROM playlist_songs WHERE song_id = ?', [songId]);
   await db.execute('DELETE FROM songs WHERE id = ?', [songId]);
+}
+
+export async function migrateSongPaths(deviceId: string, prefix: string): Promise<void> {
+  if (!prefix) return;
+  const db = await getDatabase();
+  await db.execute(
+    "UPDATE songs SET relative_path = ? || '/' || relative_path WHERE device_id = ? AND relative_path NOT LIKE ?",
+    [prefix, deviceId, `${prefix}/%`],
+  );
 }

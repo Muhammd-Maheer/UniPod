@@ -9,9 +9,9 @@ import { PlayerState, Song, ViewMode, Playlist, PlaylistSong } from './types';
 import { NowPlaying } from './components/NowPlaying';
 import { parseFilenameForMetadata, extractArtistName } from './utils/parseFilename';
 import { readDir, watch } from '@tauri-apps/plugin-fs';
-import { getAllSongs, saveSong, deleteSong } from './database/songs';
+import { getAllSongs, saveSong, setSongFavorite, setSongOrder, deleteSong, migrateSongPaths } from './database/songs';
 import { getOrCreateArtist } from './database/artists';
-import { getOrCreateDevice } from './database/devices';
+import { getAllDevices, getOrCreateDevice, updateDeviceIdentity } from './database/devices';
 import {
   deletePlaylist,
   deletePlaylistSong,
@@ -23,6 +23,16 @@ import {
 import './App.css';
 
 const getBasename = (path: string) => path.split(/[/\\]/).pop() || '';
+const getDriveRoot = (path: string) => {
+  const match = path.match(/^([A-Za-z]):[\\/]/);
+  return match ? `${match[1]}:\\` : path;
+};
+const getMountRelativePath = (path: string) => path
+  .replace(/^[A-Za-z]:[\\/]?/, '')
+  .replace(/[\\/]+$/, '')
+  .replace(/\\/g, '/');
+const joinDrivePath = (root: string, relativePath: string) =>
+  relativePath ? `${root.replace(/[\\/]+$/, '')}\\${relativePath.replace(/\//g, '\\')}` : root;
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<ViewMode>('songs');
@@ -142,7 +152,7 @@ const App: React.FC = () => {
     if (!selected) return;
 
     const paths = Array.isArray(selected) ? selected : [selected];
-    const device = await getOrCreateDevice('Local files', 'local-files');
+    const device = await getOrCreateDevice('Local files', 'local-files', '');
     const newSongs = await Promise.all(paths.map((path) => buildSongFromPath(path, device.id, path)));
 
     await Promise.all(newSongs.map(saveSong));
@@ -333,9 +343,16 @@ const App: React.FC = () => {
 
   const handleRemoveSongFromPlaylist = (playlistId: string, songId: string) => {
     void deletePlaylistSong(playlistId, songId);
-    setPlaylistSongs((prev) => prev
+    let position = 0;
+    const remainingSongs = playlistSongs
       .filter((item) => !(item.playlistId === playlistId && item.songId === songId))
-      .map((item, index) => item.playlistId === playlistId ? { ...item, position: index } : item));
+      .map((item) => item.playlistId === playlistId ? { ...item, position: position++ } : item);
+    void Promise.all(
+      remainingSongs
+        .filter((item) => item.playlistId === playlistId)
+        .map(savePlaylistSong),
+    );
+    setPlaylistSongs(remainingSongs);
   };
 
   const handleReorderSongs = (orderedVisibleIds: string[], playlistId?: string) => {
@@ -372,6 +389,7 @@ const App: React.FC = () => {
     const reorderedSongs = songs.map((song) =>
       visibleIdSet.has(song.id) ? reorderedVisibleSongs[visibleIndex++] : song
     );
+    void setSongOrder(reorderedSongs.map((song) => song.id));
     setSongs(() => reorderedSongs);
 
     if (!playerState.shuffle) {
@@ -456,9 +474,30 @@ const App: React.FC = () => {
   };
 
   const syncDevicePaths = async (rootPath: string, paths: string[]) => {
-    const device = await getOrCreateDevice(getBasename(rootPath) || 'Music device', rootPath);
+    const driveRoot = getDriveRoot(rootPath);
+    const identifier = await invoke<string>('get_device_identifier', { root: driveRoot });
+    const mountPath = getMountRelativePath(rootPath);
+    const knownDevices = await getAllDevices();
+    const legacyDevice = knownDevices.find((device) =>
+      device.mountPath === null && getDriveRoot(device.identifier).toLowerCase() === driveRoot.toLowerCase()
+    );
+    const legacyPrefix = legacyDevice && /^[A-Za-z]:[\\/]/.test(legacyDevice.identifier)
+      ? getMountRelativePath(legacyDevice.identifier)
+      : '';
+    const device = legacyDevice
+      ? (await updateDeviceIdentity(legacyDevice.id, identifier, mountPath), {
+          ...legacyDevice,
+          identifier,
+          mountPath,
+        })
+      : await getOrCreateDevice(getBasename(rootPath) || 'Music device', identifier, mountPath);
     const currentSongs = songsRef.current;
-    const deviceSongs = currentSongs.filter((song) => song.deviceId === device.id);
+    const deviceSongs = currentSongs
+      .filter((song) => song.deviceId === device.id)
+      .map((song) => legacyPrefix
+        ? { ...song, relativePath: `${legacyPrefix}/${song.relativePath}`.replace(/\/+/g, '/') }
+        : song);
+    if (legacyPrefix) await Promise.all(deviceSongs.map(saveSong));
     const existingByPath = new Map(deviceSongs.map((song) => [song.relativePath.toLocaleLowerCase(), song]));
     const foundRelativePaths = new Set<string>();
     const syncedSongs: Song[] = [];
@@ -466,7 +505,7 @@ const App: React.FC = () => {
     for (const path of paths) {
       const relativePath = path
         .replace(/\\/g, '/')
-        .replace(rootPath.replace(/\\/g, '/').replace(/\/$/, ''), '')
+        .replace(driveRoot.replace(/\\/g, '/').replace(/\/$/, ''), '')
         .replace(/^\//, '');
       const existing = existingByPath.get(relativePath.toLocaleLowerCase());
       const song = existing
@@ -481,8 +520,11 @@ const App: React.FC = () => {
       .map((song) => ({ ...song, sourcePath: undefined, isMissing: true }));
     await Promise.all(missingSongs.map(saveSong));
 
-    const otherSongs = currentSongs.filter((song) => song.deviceId !== device.id);
-    const nextSongs = [...otherSongs, ...syncedSongs, ...missingSongs];
+    const syncedById = new Map([...syncedSongs, ...missingSongs].map((song) => [song.id, song]));
+    const knownSongIds = new Set(currentSongs.map((song) => song.id));
+    const nextSongs = currentSongs.map((song) => syncedById.get(song.id) ?? song);
+    nextSongs.push(...[...syncedSongs, ...missingSongs].filter((song) => !knownSongIds.has(song.id)));
+    songsRef.current = nextSongs;
     setSongs(nextSongs);
     setPlayOrder(nextSongs.map((song) => song.id));
   };
@@ -540,11 +582,25 @@ const App: React.FC = () => {
     }
   };
 
+  const findDeviceRoot = async (identifier: string): Promise<string | null> => {
+    for (let code = 65; code <= 90; code += 1) {
+      const root = `${String.fromCharCode(code)}:\\`;
+      try {
+        const currentIdentifier = await invoke<string>('get_device_identifier', { root });
+        if (currentIdentifier === identifier) return root;
+      } catch {
+        // An unavailable drive is expected while checking possible mount points.
+      }
+    }
+    return null;
+  };
+
   const handleToggleFavorite = (songId: string) => {
     const song = songsRef.current.find((item) => item.id === songId);
     if (!song) return;
-    const updatedSong = { ...song, isFavorite: !song.isFavorite };
-    void saveSong(updatedSong);
+    const isFavorite = !song.isFavorite;
+    const updatedSong = { ...song, isFavorite };
+    void setSongFavorite(songId, isFavorite);
     setSongs((prevSongs) => prevSongs.map((item) => item.id === songId ? updatedSong : item));
   };
 
@@ -682,9 +738,31 @@ const App: React.FC = () => {
           isMissing: true,
         }));
         setSongs(unavailableSongs);
+        songsRef.current = unavailableSongs;
         setPlaylists(storedPlaylists);
         setPlaylistSongs(storedPlaylistSongs);
         setPlayOrder(unavailableSongs.map((song) => song.id));
+
+        const devices = await getAllDevices();
+        for (const device of devices) {
+          if (device.identifier === 'local-files') continue;
+          let identifier = device.identifier;
+          let mountPath = device.mountPath;
+          if (mountPath === null && /^[A-Za-z]:[\\/]/.test(identifier)) {
+            const legacyPrefix = getMountRelativePath(identifier);
+            await migrateSongPaths(device.id, legacyPrefix);
+            identifier = await invoke<string>('get_device_identifier', { root: identifier });
+            mountPath = legacyPrefix;
+            await updateDeviceIdentity(device.id, identifier, mountPath);
+          }
+          if (mountPath === null) continue;
+          const driveRoot = await findDeviceRoot(identifier);
+          if (!driveRoot) continue;
+          const scanRoot = joinDrivePath(driveRoot, mountPath);
+          const paths = await invoke<string[]>('scan_disk_for_audio', { root: scanRoot });
+          const uniquePaths = Array.from(new Map(paths.map((path) => [path.toLowerCase(), path])).values());
+          await syncDevicePaths(scanRoot, uniquePaths);
+        }
       } catch (error) {
         console.error('Could not load the library database:', error);
       }
