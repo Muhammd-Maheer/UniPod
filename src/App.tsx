@@ -2,16 +2,16 @@ import React, { useEffect, useRef, useState } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 import { TitleBar } from './components/TitleBar';
-import { Sidebar } from './components/Sidebar';
+import { Sidebar, ThemeId } from './components/Sidebar';
 import { ViewContainer } from './components/ViewContainer';
 import { Player } from './components/Player';
 import { PlayerState, Song, ViewMode, Playlist, PlaylistSong } from './types';
 import { NowPlaying } from './components/NowPlaying';
 import { parseFilenameForMetadata, extractArtistName } from './utils/parseFilename';
 import { readDir, watch } from '@tauri-apps/plugin-fs';
-import { getAllSongs, saveSong, setSongFavorite, setSongOrder, deleteSong, migrateSongPaths } from './database/songs';
+import { getAllSongs, saveSong, setSongFavorite, setSongOrder, deleteSongs, migrateSongPaths } from './database/songs';
 import { getOrCreateArtist } from './database/artists';
-import { getAllDevices, getOrCreateDevice, updateDeviceIdentity } from './database/devices';
+import { getAllDevices, getOrCreateDevice, getScanRoots, saveScanRoot, updateDeviceIdentity } from './database/devices';
 import {
   deletePlaylist,
   deletePlaylistSong,
@@ -33,10 +33,16 @@ const getMountRelativePath = (path: string) => path
   .replace(/\\/g, '/');
 const joinDrivePath = (root: string, relativePath: string) =>
   relativePath ? `${root.replace(/[\\/]+$/, '')}\\${relativePath.replace(/\//g, '\\')}` : root;
+const themeStorageKey = 'unipod-theme';
+const themeIds: ThemeId[] = ['classic', 'dark', 'warm', 'retro', 'navy'];
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<ViewMode>('songs');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [theme, setTheme] = useState<ThemeId>(() => {
+    const savedTheme = localStorage.getItem(themeStorageKey);
+    return savedTheme && themeIds.includes(savedTheme as ThemeId) ? savedTheme as ThemeId : 'warm';
+  });
   const [songs, setSongs] = useState<Song[]>([]);
   const [playOrder, setPlayOrder] = useState<string[]>([]);
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
@@ -62,6 +68,14 @@ const App: React.FC = () => {
   });
   const [showNowPlaying, setShowNowPlaying] = useState(false);
   const prevHadSongRef = useRef(false);
+
+  useEffect(() => {
+    document.title = playerState.currentSong?.title || 'UniPod';
+  }, [playerState.currentSong]);
+
+  useEffect(() => {
+    localStorage.setItem(themeStorageKey, theme);
+  }, [theme]);
 
   const playSongById = (id: string, list: Song[] = songs) => {
     const song = list.find((s) => s.id === id) || songs.find((s) => s.id === id);
@@ -290,6 +304,7 @@ const App: React.FC = () => {
     const artist = await getOrCreateArtist(newArtist);
     const updatedSong = { ...currentSong, artistId: artist.id, artistName: artist.name };
     await saveSong(updatedSong);
+    songsRef.current = songsRef.current.map((song) => song.id === songId ? updatedSong : song);
     setSongs((prev) => prev.map((song) => song.id === songId ? updatedSong : song));
     setPlayerState((prev) => prev.currentSong?.id === songId
       ? { ...prev, currentSong: updatedSong }
@@ -306,6 +321,7 @@ const App: React.FC = () => {
     const updatedSong = { ...currentSong, artistId: artist.id, artistName: artist.name };
     await saveSong(updatedSong);
 
+    songsRef.current = songsRef.current.map((song) => song.id === songId ? updatedSong : song);
     setSongs((prev) => prev.map((s) => (s.id === songId ? updatedSong : s)));
     setPlayerState((prev) =>
       prev.currentSong?.id === songId
@@ -410,7 +426,8 @@ const App: React.FC = () => {
     const idSet = new Set(ids);
 
     setSongs((prev) => prev.filter((s) => !idSet.has(s.id)));
-    void Promise.all(ids.map(deleteSong));
+    void deleteSongs(ids);
+    setPlaylistSongs((prev) => prev.filter((item) => !idSet.has(item.songId)));
     setPlayOrder((prev) => prev.filter((id) => !idSet.has(id)));
 
     setPlayerState((prev) => {
@@ -425,8 +442,6 @@ const App: React.FC = () => {
       return prev;
     });
   };
-
-  const handleRemoveSong = (songId: string) => removeSongsByIds([songId]);
 
   const handleAudioError = () => {
     if (intentionalStopRef.current) {
@@ -491,9 +506,17 @@ const App: React.FC = () => {
           mountPath,
         })
       : await getOrCreateDevice(getBasename(rootPath) || 'Music device', identifier, mountPath);
+    await saveScanRoot(device.id, rootPath, mountPath);
     const currentSongs = songsRef.current;
+    const normalizedMountPath = mountPath.replace(/[\\/]/g, '/').replace(/^\/+|\/+$/g, '').toLowerCase();
+    const isInScannedRoot = (relativePath: string) => {
+      const normalizedPath = relativePath.replace(/[\\/]/g, '/').replace(/^\/+/, '').toLowerCase();
+      return !normalizedMountPath
+        || normalizedPath === normalizedMountPath
+        || normalizedPath.startsWith(`${normalizedMountPath}/`);
+    };
     const deviceSongs = currentSongs
-      .filter((song) => song.deviceId === device.id)
+      .filter((song) => song.deviceId === device.id && isInScannedRoot(song.relativePath))
       .map((song) => legacyPrefix
         ? { ...song, relativePath: `${legacyPrefix}/${song.relativePath}`.replace(/\/+/g, '/') }
         : song);
@@ -744,21 +767,35 @@ const App: React.FC = () => {
         setPlayOrder(unavailableSongs.map((song) => song.id));
 
         const devices = await getAllDevices();
-        for (const device of devices) {
-          if (device.identifier === 'local-files') continue;
+        const storedRoots = await getScanRoots();
+        const rootsToScan = storedRoots.length > 0
+          ? storedRoots
+          : devices
+            .filter((device) => device.identifier !== 'local-files' && device.mountPath !== null)
+            .map((device) => ({
+              id: device.id,
+              deviceId: device.id,
+              rootPath: '',
+              relativePath: device.mountPath!,
+            }));
+
+        for (const root of rootsToScan) {
+          const device = devices.find((item) => item.id === root.deviceId);
+          if (!device || device.identifier === 'local-files') continue;
           let identifier = device.identifier;
-          let mountPath = device.mountPath;
-          if (mountPath === null && /^[A-Za-z]:[\\/]/.test(identifier)) {
+          let mountPath = root.relativePath;
+          if (device.mountPath === null && /^[A-Za-z]:[\\/]/.test(identifier)) {
             const legacyPrefix = getMountRelativePath(identifier);
             await migrateSongPaths(device.id, legacyPrefix);
             identifier = await invoke<string>('get_device_identifier', { root: identifier });
             mountPath = legacyPrefix;
             await updateDeviceIdentity(device.id, identifier, mountPath);
           }
-          if (mountPath === null) continue;
           const driveRoot = await findDeviceRoot(identifier);
           if (!driveRoot) continue;
-          const scanRoot = joinDrivePath(driveRoot, mountPath);
+          const scanRoot = /^[A-Za-z]:[\\/]/.test(root.rootPath)
+            ? joinDrivePath(driveRoot, mountPath)
+            : root.rootPath || joinDrivePath(driveRoot, mountPath);
           const paths = await invoke<string[]>('scan_disk_for_audio', { root: scanRoot });
           const uniquePaths = Array.from(new Map(paths.map((path) => [path.toLowerCase(), path])).values());
           await syncDevicePaths(scanRoot, uniquePaths);
@@ -803,7 +840,7 @@ const App: React.FC = () => {
   }, [playerState.currentSong]);
 
   return (
-    <div className="app">
+    <div className={`app theme-${theme}`} data-theme={theme}>
       <audio
         ref={audioRef}
         onTimeUpdate={handleTimeUpdate}
@@ -822,6 +859,8 @@ const App: React.FC = () => {
           isScanningDevice={isScanningDevice}
           collapsed={isSidebarCollapsed}
           onToggleCollapsed={() => setIsSidebarCollapsed((collapsed) => !collapsed)}
+          theme={theme}
+          onSelectTheme={setTheme}
         />
         <ViewContainer
           currentView={currentView}
@@ -830,7 +869,7 @@ const App: React.FC = () => {
           onSelectSong={handleSelectSong}
           onSwapArtistTitle={handleSwapArtistTitle}
           onEditArtist={handleEditArtist}
-          onRemoveSong={handleRemoveSong}
+          onRemoveSongs={removeSongsByIds}
           playlists={playlists}
           playlistSongs={playlistSongs}
           onCreatePlaylist={handleCreatePlaylist}

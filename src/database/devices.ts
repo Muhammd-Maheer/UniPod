@@ -7,6 +7,13 @@ export interface Device {
   mountPath: string | null;
 }
 
+export interface ScanRoot {
+  id: string;
+  deviceId: string;
+  rootPath: string;
+  relativePath: string;
+}
+
 export async function getAllDevices(): Promise<Device[]> {
   const db = await getDatabase();
   return db.select<Device[]>('SELECT id, name, identifier, mount_path AS mountPath FROM devices ORDER BY name');
@@ -45,5 +52,26 @@ export async function updateDeviceIdentity(
   await db.execute(
     'UPDATE devices SET identifier = ?, mount_path = ? WHERE id = ?',
     [identifier, mountPath, deviceId],
+  );
+}
+
+export async function getScanRoots(): Promise<ScanRoot[]> {
+  const db = await getDatabase();
+  return db.select<ScanRoot[]>(
+    'SELECT id, device_id AS deviceId, root_path AS rootPath, relative_path AS relativePath FROM scan_roots ORDER BY root_path',
+  );
+}
+
+export async function saveScanRoot(
+  deviceId: string,
+  rootPath: string,
+  relativePath: string,
+): Promise<void> {
+  const db = await getDatabase();
+  await db.execute(
+    `INSERT INTO scan_roots (id, device_id, root_path, relative_path)
+     VALUES (?, ?, ?, ?)
+     ON CONFLICT(device_id, root_path) DO UPDATE SET relative_path = excluded.relative_path`,
+    [crypto.randomUUID(), deviceId, rootPath, relativePath],
   );
 }

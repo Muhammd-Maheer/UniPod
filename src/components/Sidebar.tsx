@@ -2,6 +2,23 @@ import React from 'react';
 import { ViewMode } from '../types';
 import { FolderSearch, HardDrive, Menu } from 'lucide-react';
 
+export type ThemeId = 'classic' | 'dark' | 'warm' | 'retro' | 'navy';
+
+interface ThemeOption {
+  id: ThemeId;
+  name: string;
+  primary: string;
+  secondary: string;
+}
+
+const themeOptions: ThemeOption[] = [
+  { id: 'classic', name: 'Classic iPod', primary: '#1769e0', secondary: '#8bb8eb' },
+  { id: 'dark', name: 'Dark iPod', primary: '#13c4df', secondary: '#56d9e8' },
+  { id: 'warm', name: 'Warm Player', primary: '#ed7d0f', secondary: '#f5aa4f' },
+  { id: 'retro', name: 'Retro Tech', primary: '#8bd619', secondary: '#cce7ad' },
+  { id: 'navy', name: 'Navy + Cream', primary: '#203b63', secondary: '#d9b477' },
+];
+
 interface SidebarProps {
   currentView: ViewMode;
   onSelectView: (view: ViewMode) => void;
@@ -11,6 +28,8 @@ interface SidebarProps {
   isScanningDevice: boolean;
   collapsed: boolean;
   onToggleCollapsed: () => void;
+  theme: ThemeId;
+  onSelectTheme: (theme: ThemeId) => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ 
@@ -21,7 +40,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onScanDevice,
   isScanningDevice,
   collapsed,
-  onToggleCollapsed
+  onToggleCollapsed,
+  theme,
+  onSelectTheme,
  }) => {
   return (
     <aside className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
@@ -72,6 +93,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <span>{isScanningDevice ? 'Scanning Disk...' : 'Scan Disk'}</span>
         </button>
       </>}
+      <div className="theme-switcher" aria-label="Choose theme">
+        {themeOptions.map((option) => {
+          const isSelected = theme === option.id;
+          return (
+            <button
+              key={option.id}
+              className={`theme-dot ${isSelected ? 'selected' : ''}`}
+              type="button"
+              title={option.name}
+              aria-label={`Use ${option.name} theme`}
+              aria-pressed={isSelected}
+              style={{ '--theme-primary': option.primary, '--theme-secondary': option.secondary } as React.CSSProperties}
+              onClick={() => onSelectTheme(option.id)}
+            />
+          );
+        })}
+      </div>
     </aside>
   );
 };

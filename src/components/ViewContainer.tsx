@@ -10,7 +10,7 @@ interface ViewContainerProps {
   onSelectSong: (song: Song, contextSongs?: Song[]) => void;
   onSwapArtistTitle: (songId: string) => void;
   onEditArtist: (songId: string, newArtist: string) => void;
-  onRemoveSong: (songId: string) => void;
+  onRemoveSongs: (songIds: string[]) => void;
   playlists: Playlist[];
   playlistSongs: PlaylistSong[];
   onCreatePlaylist: (name: string) => void;
@@ -29,7 +29,7 @@ export const ViewContainer: React.FC<ViewContainerProps> = ({
   onSelectSong,
   onSwapArtistTitle,
   onEditArtist,
-  onRemoveSong,
+  onRemoveSongs,
   playlists,
   playlistSongs,
   onCreatePlaylist,
@@ -43,7 +43,11 @@ export const ViewContainer: React.FC<ViewContainerProps> = ({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
-  const [songToDelete, setSongToDelete] = useState<Song | null>(null);
+  const [songsToDelete, setSongsToDelete] = useState<Song[]>([]);
+  const [selectedSongIds, setSelectedSongIds] = useState<Set<string>>(new Set());
+  const [selectionMode, setSelectionMode] = useState(false);
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressTriggeredRef = useRef(false);
   const [selectedArtist, setSelectedArtist] = useState<string | null>(null);
   const [selectedPlaylistId, setSelectedPlaylistId] = useState<string | null>(null);
   const [newPlaylistName, setNewPlaylistName] = useState('');
@@ -60,7 +64,41 @@ export const ViewContainer: React.FC<ViewContainerProps> = ({
   const [dropTargetSongId, setDropTargetSongId] = useState<string | null>(null);
   const draggedSongRef = useRef<string | null>(null);
 
+  const clearLongPressTimer = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
+
+  const toggleSongSelection = (songId: string) => {
+    setSelectedSongIds((previous) => {
+      const next = new Set(previous);
+      if (next.has(songId)) next.delete(songId);
+      else next.add(songId);
+      return next;
+    });
+  };
+
+  const startSongPress = (songId: string) => {
+    longPressTriggeredRef.current = false;
+    clearLongPressTimer();
+    longPressTimerRef.current = setTimeout(() => {
+      longPressTriggeredRef.current = true;
+      setSelectionMode(true);
+      setSelectedSongIds((previous) => new Set(previous).add(songId));
+    }, 450);
+  };
+
+  const endSongPress = () => clearLongPressTimer();
+
+  const requestRemoveSongs = (songs: Song[]) => {
+    if (songs.length > 0) setSongsToDelete(songs);
+  };
+
   useEffect(() => {
+    setSelectedSongIds(new Set());
+    setSelectionMode(false);
     if (currentView !== 'playlists') {
       setSelectedPlaylistId(null);
       setEditingPlaylistName(false);
@@ -83,6 +121,8 @@ export const ViewContainer: React.FC<ViewContainerProps> = ({
       setSelectedArtist(null);
     }
   }, [currentView]);
+
+  useEffect(() => () => clearLongPressTimer(), []);
 
   const artistGroups = (() => {
     const map = new Map<string, Song[]>();
@@ -254,7 +294,31 @@ export const ViewContainer: React.FC<ViewContainerProps> = ({
         (currentView) === 'favorites' ||
         (currentView === 'artists' && selectedArtist) ||
         (currentView === 'playlists' && selectedPlaylist)) && (
-        <table className="song-table">
+        <>
+          {selectedSongIds.size > 0 && (
+            <div className="song-selection-toolbar">
+              <span>{selectedSongIds.size} selected</span>
+              <button
+                className="btn-remove-selected"
+                type="button"
+                onClick={() => requestRemoveSongs(visibleSongs.filter((song) => selectedSongIds.has(song.id)))}
+              >
+                <Trash2 size={15} />
+                <span>Remove from app</span>
+              </button>
+              <button
+                className="btn-clear-selection"
+                type="button"
+                onClick={() => {
+                  setSelectedSongIds(new Set());
+                  setSelectionMode(false);
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          )}
+          <table className="song-table">
           <thead>
             <tr>
               <th style={{ width: '40px' }}>#</th>
@@ -272,8 +336,21 @@ export const ViewContainer: React.FC<ViewContainerProps> = ({
                 <tr
                   key={song.id}
                   data-song-id={song.id}
-                  className={`song-row ${isActive ? 'active' : ''} ${song.isMissing ? 'song-row-missing' : ''} ${draggedSongId === song.id ? 'dragging' : ''} ${dropTargetSongId === song.id ? 'drop-target' : ''}`}
-                  onClick={() => onSelectSong(song, visibleSongs)}
+                  className={`song-row ${isActive ? 'active' : ''} ${selectedSongIds.has(song.id) ? 'selected' : ''} ${song.isMissing ? 'song-row-missing' : ''} ${draggedSongId === song.id ? 'dragging' : ''} ${dropTargetSongId === song.id ? 'drop-target' : ''}`}
+                  onPointerDown={() => startSongPress(song.id)}
+                  onPointerUp={endSongPress}
+                  onPointerCancel={endSongPress}
+                  onClick={() => {
+                    if (longPressTriggeredRef.current) {
+                      longPressTriggeredRef.current = false;
+                      return;
+                    }
+                    if (selectionMode) {
+                      toggleSongSelection(song.id);
+                      return;
+                    }
+                    onSelectSong(song, visibleSongs);
+                  }}
                 >
                   <td className="song-position-cell">
                     <span className="song-position-number">{index + 1}</span>
@@ -342,8 +419,8 @@ export const ViewContainer: React.FC<ViewContainerProps> = ({
                 <td>{formatTime(song.duration)}</td>
 
                   <td className="action-cell"
+                   onPointerDown={(e) => e.stopPropagation()}
                    onClick={(e) => e.stopPropagation()}
-                   style={{ display: 'flex', justifyContent: 'flex-end', gap: '4px', alignItems: 'center' }}
                    >
                     <button
                       className="btn-swap"
@@ -389,7 +466,7 @@ export const ViewContainer: React.FC<ViewContainerProps> = ({
                           <button
                             className="dropdown-item danger"
                             onClick={() => {
-                              setSongToDelete(song);
+                                requestRemoveSongs([song]);
                               setOpenMenuId(null);
                             }}
                           >
@@ -404,7 +481,8 @@ export const ViewContainer: React.FC<ViewContainerProps> = ({
               );
             })}
           </tbody>
-        </table>
+          </table>
+        </>
       )}
 
       {currentView === 'artists' && !selectedArtist && (
@@ -661,22 +739,26 @@ export const ViewContainer: React.FC<ViewContainerProps> = ({
         </div>
       )}
 
-      {songToDelete && (
-        <div className="modal-overlay" onClick={() => setSongToDelete(null)}>
+      {songsToDelete.length > 0 && (
+        <div className="modal-overlay" onClick={() => setSongsToDelete([])}>
           <div className="modal-container" onClick={(e) => e.stopPropagation()}>
-            <h3>Remove Song</h3>
+            <h3>{songsToDelete.length === 1 ? 'Remove Song' : 'Remove Songs'}</h3>
             <p>
-              Are you sure you want to remove <strong>"{songToDelete.title}"</strong> from the app?
+              Are you sure you want to remove {songsToDelete.length === 1
+                ? <><strong>"{songsToDelete[0].title}"</strong></>
+                : <strong>{songsToDelete.length} selected songs</strong>} from the app?
             </p>
             <div className="modal-actions">
-              <button className="btn-modal btn-cancel" onClick={() => setSongToDelete(null)}>
+              <button className="btn-modal btn-cancel" onClick={() => setSongsToDelete([])}>
                 Cancel
               </button>
               <button
                 className="btn-modal btn-danger"
                 onClick={() => {
-                  onRemoveSong(songToDelete.id);
-                  setSongToDelete(null);
+                  onRemoveSongs(songsToDelete.map((song) => song.id));
+                  setSongsToDelete([]);
+                  setSelectedSongIds(new Set());
+                  setSelectionMode(false);
                 }}
               >
                 Remove

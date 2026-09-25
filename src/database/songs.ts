@@ -87,9 +87,22 @@ export async function saveSong(song: Song): Promise<void> {
 }
 
 export async function deleteSong(songId: string): Promise<void> {
+  await deleteSongs([songId]);
+}
+
+export async function deleteSongs(songIds: string[]): Promise<void> {
+  if (songIds.length === 0) return;
+
   const db = await getDatabase();
-  await db.execute('DELETE FROM playlist_songs WHERE song_id = ?', [songId]);
-  await db.execute('DELETE FROM songs WHERE id = ?', [songId]);
+  const placeholders = songIds.map(() => '?').join(', ');
+  await db.execute(
+    `DELETE FROM playlist_songs WHERE song_id IN (${placeholders})`,
+    songIds,
+  );
+  await db.execute(
+    `DELETE FROM songs WHERE id IN (${placeholders})`,
+    songIds,
+  );
 }
 
 export async function migrateSongPaths(deviceId: string, prefix: string): Promise<void> {

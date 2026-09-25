@@ -117,6 +117,12 @@ pub fn run() {
             sql: include_str!("../migrations/003_song_sort_position.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 4,
+            description: "add_scan_roots",
+            sql: include_str!("../migrations/004_scan_roots.sql"),
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()
