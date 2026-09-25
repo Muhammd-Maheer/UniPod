@@ -133,9 +133,53 @@ button {
   border-bottom: 1px solid var(--border);
 }
 
+.window-controls {
+  display: flex;
+  align-self: stretch;
+  margin: -10px -18px -10px 12px;
+}
+
+.window-controls button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  border: 0;
+  background: transparent;
+  color: var(--text-sub);
+  cursor: pointer;
+}
+
+.window-controls button:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.window-controls .window-close:hover {
+  background: #c9363e;
+  color: #fff;
+}
+
 .title-bar-brand {
   font-weight: 700;
   font-size: 0.95rem;
+}
+
+.title-bar-logo {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  display: block;
+  object-fit: cover;
+  border-radius: 4px;
+}
+
+.title-bar-drag-region {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex: 1;
+  height: 100%;
 }
 
 .drive-status {
